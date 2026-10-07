@@ -5,9 +5,12 @@ import { FaUser, FaEnvelope, FaLock, FaEye, FaEyeSlash, FaBuilding } from 'react
 import { authService, departmentService } from '../services/api';
 import Spinner from '../components/Spinner';
 import { toast } from '../components/Toast';
+import LanguageSwitcher from '../components/LanguageSwitcher';
+import { useLanguage } from '../i18n/LanguageContext';
 
 const Register = () => {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [formData, setFormData] = useState({
     full_name: '',
     email: '',
@@ -103,13 +106,16 @@ const Register = () => {
         className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full"
       >
         <div className="text-center mb-8">
+          <div className="flex justify-center mb-4">
+            <LanguageSwitcher dark={false} />
+          </div>
           <div className="mb-4">
             <h1 className="text-3xl font-bold text-mint-primary">MinT</h1>
-            <p className="text-mint-gray text-sm font-medium">Ministry of Innovation and Technology</p>
+            <p className="text-mint-gray text-sm font-medium">{t('Ministry of Innovation and Technology')}</p>
             <p className="text-gray-400 text-xs mt-1">Ethiopia</p>
           </div>
-          <h2 className="text-2xl font-bold text-gray-800">Create Account</h2>
-          <p className="text-gray-500 text-sm mt-1">Register as a trainee</p>
+          <h2 className="text-2xl font-bold text-gray-800">{t('Create Account')}</h2>
+          <p className="text-gray-500 text-sm mt-1">{t('Register as a trainee')}</p>
         </div>
 
         {error && (
@@ -120,7 +126,7 @@ const Register = () => {
 
         <form onSubmit={handleSubmit} autoComplete="off">
           <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-semibold mb-2">Full Name</label>
+            <label className="block text-gray-700 text-sm font-semibold mb-2">{t('Full Name')}</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <FaUser className="h-5 w-5 text-gray-400" />
@@ -139,7 +145,7 @@ const Register = () => {
           </div>
 
           <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-semibold mb-2">Email Address</label>
+            <label className="block text-gray-700 text-sm font-semibold mb-2">{t('Email Address')}</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <FaEnvelope className="h-5 w-5 text-gray-400" />
@@ -149,7 +155,7 @@ const Register = () => {
                 type="email"
                 value={formData.email}
                 onChange={handleChange}
-                placeholder="Enter your email"
+                placeholder={t('Enter your email')}
                 autoComplete="off"
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-mint-primary focus:border-transparent transition-all text-gray-800"
                 required
@@ -158,7 +164,7 @@ const Register = () => {
           </div>
 
           <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-semibold mb-2">Password</label>
+            <label className="block text-gray-700 text-sm font-semibold mb-2">{t('Password')}</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <FaLock className="h-5 w-5 text-gray-400" />
@@ -168,7 +174,7 @@ const Register = () => {
                 type={showPassword ? 'text' : 'password'}
                 value={formData.password}
                 onChange={handleChange}
-                placeholder="Create a password (min 6 characters)"
+                placeholder={t('Create a password (min 6 characters)')}
                 autoComplete="new-password"
                 className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-mint-primary focus:border-transparent transition-all text-gray-800"
                 required
@@ -190,7 +196,7 @@ const Register = () => {
           </div>
 
           <div className="mb-6">
-            <label className="block text-gray-700 text-sm font-semibold mb-2">Confirm Password</label>
+            <label className="block text-gray-700 text-sm font-semibold mb-2">{t('Confirm Password')}</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <FaLock className="h-5 w-5 text-gray-400" />
@@ -200,7 +206,7 @@ const Register = () => {
                 type={showConfirmPassword ? 'text' : 'password'}
                 value={formData.confirmPassword}
                 onChange={handleChange}
-                placeholder="Confirm your password"
+                placeholder={t('Confirm your password')}
                 autoComplete="new-password"
                 className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-mint-primary focus:border-transparent transition-all text-gray-800"
                 required
@@ -221,7 +227,7 @@ const Register = () => {
           </div>
 
           <div className="mb-6">
-            <label className="block text-gray-700 text-sm font-semibold mb-2">Department</label>
+            <label className="block text-gray-700 text-sm font-semibold mb-2">{t('Department')}</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <FaBuilding className="h-5 w-5 text-gray-400" />
@@ -233,7 +239,7 @@ const Register = () => {
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-mint-primary focus:border-transparent transition-all text-gray-800 bg-white"
                 required
               >
-                <option value="">Select your department</option>
+                <option value="">{t('Select your department')}</option>
                 {departments.map((dept) => (
                   <option key={dept.id} value={dept.id}>{dept.name}</option>
                 ))}
@@ -252,26 +258,26 @@ const Register = () => {
             {loading ? (
               <>
                 <Spinner size="sm" />
-                Creating account...
+                {t('Creating account...')}
               </>
             ) : (
-              'Create Account'
+              t('Create Account')
             )}
           </button>
         </form>
 
         <div className="mt-6 text-center">
           <p className="text-sm text-gray-600">
-            Already have an account?{' '}
+            {t('Already have an account?')}{' '}
             <Link to="/login" className="text-mint-primary font-semibold hover:underline transition-all">
-              Sign In
+              {t('Sign In')}
             </Link>
           </p>
           <Link 
             to="/" 
             className="text-sm text-mint-primary hover:text-mint-primary/80 hover:underline transition-all inline-block mt-3"
           >
-            ← Back to Home
+            ← {t('Back to Home')}
           </Link>
         </div>
       </motion.div>

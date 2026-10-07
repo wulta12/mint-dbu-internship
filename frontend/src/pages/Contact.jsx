@@ -1,104 +1,59 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
-  FaHome,
-  FaInfoCircle,
-  FaBookOpen,
   FaEnvelope,
-  FaSignInAlt,
-  FaUserPlus,
-  FaFacebook,
-  FaLinkedin,
-  FaTelegram,
-  FaTwitter,
   FaMapMarkerAlt,
   FaPhone,
   FaClock,
-  FaPaperPlane
+  FaPaperPlane,
+  FaFacebook,
+  FaLinkedin,
+  FaTelegram,
+  FaTwitter
 } from 'react-icons/fa';
-import mintLogo from '../images/mint-logo.png';
+import api from '../services/api';
 import { toast } from '../components/Toast';
+import PublicLayout from '../components/PublicLayout';
+import { useLanguage } from '../i18n/LanguageContext';
+import { SOCIAL_LINKS } from '../components/PublicFooter';
 
 const Contact = () => {
+  const { t } = useLanguage();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     subject: '',
     message: ''
   });
+  const [sending, setSending] = useState(false);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e) => {
+  // Honest contact form: the success message is shown ONLY after the message
+  // has actually been saved to the backend (contact_messages table).
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    toast.success('Your message has been sent successfully!');
-    setFormData({ name: '', email: '', subject: '', message: '' });
+    setSending(true);
+    try {
+      const response = await api.post('/contact', formData);
+      if (response.data?.success) {
+        toast.success(response.data.message || 'Your message has been sent successfully!');
+        setFormData({ name: '', email: '', subject: '', message: '' });
+      } else {
+        toast.error(response.data?.message || 'Failed to send your message. Please try again.');
+      }
+    } catch (err) {
+      console.error('Contact form error:', err);
+      toast.error(err.response?.data?.message || 'Failed to send your message. Please try again.');
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-mint-light font-sans">
-      {/* ========== HEADER - Same as Homepage ========== */}
-      <header className="bg-mint-primary shadow-lg sticky top-0 z-50">
-        <div className="container mx-auto px-4">
-          <div className="flex justify-between items-center h-20">
-            {/* Logo */}
-            <Link to="/" className="flex items-center gap-3">
-              <div className="bg-white rounded-lg p-1">
-                <img 
-                  src={mintLogo} 
-                  alt="MinT Logo" 
-                  className="h-10 w-auto object-contain"
-                />
-              </div>
-              <div>
-                <div className="text-white font-bold text-sm leading-tight tracking-wide">
-                  Ministry of Innovation
-                </div>
-                <div className="text-mint-gold font-semibold text-xs tracking-wider">
-                  Training Management System
-                </div>
-              </div>
-            </Link>
-
-            {/* Navigation Links */}
-            <div className="flex items-center gap-6">
-              <nav className="hidden lg:flex items-center gap-4">
-                <Link to="/" className="flex items-center gap-1.5 text-white/80 hover:text-mint-gold transition-colors font-medium text-sm tracking-wide">
-                  <FaHome className="text-mint-gold" />
-                  Home
-                </Link>
-                <Link to="/about" className="flex items-center gap-1.5 text-white/80 hover:text-mint-gold transition-colors font-medium text-sm tracking-wide">
-                  <FaInfoCircle className="text-mint-gold" />
-                  About
-                </Link>
-                <Link to="/trainings" className="flex items-center gap-1.5 text-white/80 hover:text-mint-gold transition-colors font-medium text-sm tracking-wide">
-                  <FaBookOpen className="text-mint-gold" />
-                  Training Programs
-                </Link>
-                <Link to="/contact" className="flex items-center gap-1.5 text-mint-gold transition-colors font-medium text-sm tracking-wide">
-                  <FaEnvelope className="text-mint-gold" />
-                  Contact
-                </Link>
-              </nav>
-
-              {/* Auth Buttons */}
-              <div className="flex items-center gap-2">
-                <Link to="/login" className="flex items-center gap-1.5 px-4 py-2 text-white border border-white/30 rounded-lg hover:bg-white/10 transition-colors text-sm font-medium tracking-wide">
-                  <FaSignInAlt className="text-mint-gold" />
-                  Login
-                </Link>
-                <Link to="/register" className="flex items-center gap-1.5 px-4 py-2 bg-mint-gold text-mint-primary rounded-lg hover:bg-opacity-90 transition-colors text-sm font-medium tracking-wide">
-                  <FaUserPlus />
-                  Register
-                </Link>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+    <PublicLayout>
 
       {/* ========== CONTACT CONTENT ========== */}
       <section className="py-16 md:py-20">
@@ -112,7 +67,7 @@ const Contact = () => {
               className="text-center mb-12 md:mb-16"
             >
               <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-mint-primary tracking-tight mb-3">
-                Contact Us
+                {t('Contact Us')}
               </h1>
               <p className="text-mint-gray text-base md:text-lg tracking-wide font-light max-w-2xl mx-auto">
                 Have questions about our training programs? Reach out to us and we'll get back to you promptly.
@@ -131,7 +86,7 @@ const Contact = () => {
               >
                 <div className="bg-white rounded-2xl shadow-card p-6 md:p-8 border border-mint-border">
                   <h2 className="text-2xl font-bold text-mint-primary tracking-tight mb-6">
-                    Get in Touch
+                    {t('Get in Touch')}
                   </h2>
                   
                   <div className="space-y-5">
@@ -141,7 +96,7 @@ const Contact = () => {
                         <FaMapMarkerAlt className="text-mint-primary text-lg" />
                       </div>
                       <div>
-                        <h4 className="text-sm font-semibold text-gray-700 tracking-wide">Address</h4>
+                        <h4 className="text-sm font-semibold text-gray-700 tracking-wide">{t('Address')}</h4>
                         <p className="text-gray-600 text-sm leading-relaxed tracking-wide font-light">
                           Ministry of Innovation and Technology<br />
                           Addis Ababa, Ethiopia
@@ -155,7 +110,7 @@ const Contact = () => {
                         <FaEnvelope className="text-mint-primary text-lg" />
                       </div>
                       <div>
-                        <h4 className="text-sm font-semibold text-gray-700 tracking-wide">Email</h4>
+                        <h4 className="text-sm font-semibold text-gray-700 tracking-wide">{t('Email')}</h4>
                         <p className="text-gray-600 text-sm leading-relaxed tracking-wide font-light">
                           <span className="text-mint-primary">training@mint.gov.et</span>
                         </p>
@@ -168,7 +123,7 @@ const Contact = () => {
                         <FaPhone className="text-mint-primary text-lg" />
                       </div>
                       <div>
-                        <h4 className="text-sm font-semibold text-gray-700 tracking-wide">Phone</h4>
+                        <h4 className="text-sm font-semibold text-gray-700 tracking-wide">{t('Phone')}</h4>
                         <p className="text-gray-600 text-sm leading-relaxed tracking-wide font-light">
                           +251-11-123-4567
                         </p>
@@ -181,7 +136,7 @@ const Contact = () => {
                         <FaClock className="text-mint-primary text-lg" />
                       </div>
                       <div>
-                        <h4 className="text-sm font-semibold text-gray-700 tracking-wide">Working Hours</h4>
+                        <h4 className="text-sm font-semibold text-gray-700 tracking-wide">{t('Working Hours')}</h4>
                         <p className="text-gray-600 text-sm leading-relaxed tracking-wide font-light">
                           Monday - Friday: 8:00 AM - 5:00 PM<br />
                           Saturday - Sunday: Closed
@@ -194,19 +149,19 @@ const Contact = () => {
                 {/* Social Links */}
                 <div className="bg-white rounded-2xl shadow-card p-6 md:p-8 border border-mint-border">
                   <h3 className="text-lg font-semibold text-mint-primary tracking-tight mb-4">
-                    Connect With Us
+                    {t('Connect With Us')}
                   </h3>
                   <div className="flex gap-4">
-                    <a href="#" className="w-10 h-10 bg-mint-primary/10 rounded-lg flex items-center justify-center hover:bg-mint-primary hover:text-white transition text-mint-primary">
+                    <a href={SOCIAL_LINKS.facebook} target="_blank" rel="noopener noreferrer" className="w-10 h-10 bg-mint-primary/10 rounded-lg flex items-center justify-center hover:bg-mint-primary hover:text-white transition text-mint-primary" aria-label="Facebook">
                       <FaFacebook className="text-lg" />
                     </a>
-                    <a href="#" className="w-10 h-10 bg-mint-primary/10 rounded-lg flex items-center justify-center hover:bg-mint-primary hover:text-white transition text-mint-primary">
+                    <a href={SOCIAL_LINKS.linkedin} target="_blank" rel="noopener noreferrer" className="w-10 h-10 bg-mint-primary/10 rounded-lg flex items-center justify-center hover:bg-mint-primary hover:text-white transition text-mint-primary" aria-label="LinkedIn">
                       <FaLinkedin className="text-lg" />
                     </a>
-                    <a href="#" className="w-10 h-10 bg-mint-primary/10 rounded-lg flex items-center justify-center hover:bg-mint-primary hover:text-white transition text-mint-primary">
+                    <a href={SOCIAL_LINKS.telegram} target="_blank" rel="noopener noreferrer" className="w-10 h-10 bg-mint-primary/10 rounded-lg flex items-center justify-center hover:bg-mint-primary hover:text-white transition text-mint-primary" aria-label="Telegram">
                       <FaTelegram className="text-lg" />
                     </a>
-                    <a href="#" className="w-10 h-10 bg-mint-primary/10 rounded-lg flex items-center justify-center hover:bg-mint-primary hover:text-white transition text-mint-primary">
+                    <a href={SOCIAL_LINKS.twitter} target="_blank" rel="noopener noreferrer" className="w-10 h-10 bg-mint-primary/10 rounded-lg flex items-center justify-center hover:bg-mint-primary hover:text-white transition text-mint-primary" aria-label="X (Twitter)">
                       <FaTwitter className="text-lg" />
                     </a>
                   </div>
@@ -225,14 +180,14 @@ const Contact = () => {
                     <FaPaperPlane className="text-mint-primary text-xl" />
                   </div>
                   <h2 className="text-2xl font-bold text-mint-primary tracking-tight">
-                    Send a Message
+                    {t('Send a Message')}
                   </h2>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 tracking-wide mb-1.5">
-                      Your Name *
+                      {t('Your Name')} *
                     </label>
                     <input
                       type="text"
@@ -240,6 +195,7 @@ const Contact = () => {
                       value={formData.name}
                       onChange={handleChange}
                       required
+                      autoComplete="off"
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-mint-primary focus:border-transparent transition text-gray-700 text-sm"
                       placeholder="Enter your full name"
                     />
@@ -247,7 +203,7 @@ const Contact = () => {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 tracking-wide mb-1.5">
-                      Your Email *
+                      {t('Your Email')} *
                     </label>
                     <input
                       type="email"
@@ -255,6 +211,7 @@ const Contact = () => {
                       value={formData.email}
                       onChange={handleChange}
                       required
+                      autoComplete="off"
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-mint-primary focus:border-transparent transition text-gray-700 text-sm"
                       placeholder="Enter your email address"
                     />
@@ -262,7 +219,7 @@ const Contact = () => {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 tracking-wide mb-1.5">
-                      Subject
+                      {t('Subject')}
                     </label>
                     <input
                       type="text"
@@ -276,7 +233,7 @@ const Contact = () => {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 tracking-wide mb-1.5">
-                      Message *
+                      {t('Message')} *
                     </label>
                     <textarea
                       name="message"
@@ -291,10 +248,11 @@ const Contact = () => {
 
                   <button
                     type="submit"
-                    className="w-full bg-mint-primary text-white py-3 rounded-lg hover:bg-opacity-90 transition font-semibold text-base tracking-wide flex items-center justify-center gap-2"
+                    disabled={sending}
+                    className="w-full bg-mint-primary text-white py-3 rounded-lg hover:bg-opacity-90 transition font-semibold text-base tracking-wide flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                   >
                     <FaPaperPlane className="text-sm" />
-                    Send Message
+                    {sending ? t('Sending...') : t('Send Message')}
                   </button>
                 </form>
               </motion.div>
@@ -302,57 +260,7 @@ const Contact = () => {
           </div>
         </div>
       </section>
-
-      {/* ========== FOOTER - Same as Homepage ========== */}
-      <footer className="bg-mint-primary border-t border-white/10 pt-12 pb-4">
-        <div className="container mx-auto px-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
-            <div>
-              <h3 className="text-white font-bold text-lg mb-4 tracking-wide">MinT</h3>
-              <p className="text-white/60 text-sm tracking-wide">
-                Ministry of Innovation and Technology - Training Management System
-              </p>
-            </div>
-
-            <div>
-              <h3 className="text-white font-semibold mb-4 text-sm tracking-wide">Quick Links</h3>
-              <ul className="space-y-2 text-sm">
-                <li><Link to="/about" className="text-white/60 hover:text-mint-gold transition-colors tracking-wide">About Us</Link></li>
-                <li><Link to="/trainings" className="text-white/60 hover:text-mint-gold transition-colors tracking-wide">Training Programs</Link></li>
-                <li><Link to="/contact" className="text-white/60 hover:text-mint-gold transition-colors tracking-wide">Contact</Link></li>
-              </ul>
-            </div>
-
-            <div>
-              <h3 className="text-white font-semibold mb-4 text-sm tracking-wide">Resources</h3>
-              <ul className="space-y-2 text-sm">
-                <li><Link to="/login" className="text-white/60 hover:text-mint-gold transition-colors tracking-wide">Login</Link></li>
-                <li><Link to="/register" className="text-white/60 hover:text-mint-gold transition-colors tracking-wide">Register</Link></li>
-              </ul>
-            </div>
-
-            <div>
-              <h3 className="text-white font-semibold mb-4 text-sm tracking-wide">Contact</h3>
-              <p className="text-white/60 text-sm tracking-wide">
-                Ministry of Innovation and Technology<br />
-                Addis Ababa, Ethiopia<br />
-                <span className="text-mint-gold">training@mint.gov.et</span>
-              </p>
-              <div className="flex gap-3 mt-4">
-                <a href="#" className="text-white/60 hover:text-mint-gold transition-colors"><FaFacebook /></a>
-                <a href="#" className="text-white/60 hover:text-mint-gold transition-colors"><FaLinkedin /></a>
-                <a href="#" className="text-white/60 hover:text-mint-gold transition-colors"><FaTelegram /></a>
-                <a href="#" className="text-white/60 hover:text-mint-gold transition-colors"><FaTwitter /></a>
-              </div>
-            </div>
-          </div>
-
-          <div className="border-t border-white/10 pt-4 text-center text-sm text-white/40 tracking-wide">
-            &copy; {new Date().getFullYear()} Ministry of Innovation and Technology (MinT). All rights reserved.
-          </div>
-        </div>
-      </footer>
-    </div>
+    </PublicLayout>
   );
 };
 

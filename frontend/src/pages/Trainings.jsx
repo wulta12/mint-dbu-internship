@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { FaCalendarAlt, FaMapPin, FaUsers, FaSearch, FaClock } from 'react-icons/fa';
+import { FaCalendarAlt, FaMapPin, FaUsers, FaSearch } from 'react-icons/fa';
 import api from '../services/api';
+import PublicLayout from '../components/PublicLayout';
+import { useLanguage } from '../i18n/LanguageContext';
 
 const Trainings = () => {
+  const { t } = useLanguage();
   const [trainings, setTrainings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -56,14 +59,15 @@ const Trainings = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <PublicLayout>
+      <div className="bg-gray-50 py-8">
       <div className="container mx-auto px-4 max-w-6xl">
         {/* Header */}
         <div className="mb-6">
           <Link to="/" className="text-mint-primary hover:underline text-sm inline-block mb-2">
-            ← Back to Home
+            ← {t('Back to Home')}
           </Link>
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Available Training Programs</h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-800">{t('Available Training Programs')}</h1>
           <p className="text-gray-500 text-sm mt-1">
             Explore our comprehensive training programs designed to equip you with in-demand skills.
           </p>
@@ -76,7 +80,7 @@ const Trainings = () => {
               <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm" />
               <input
                 type="text"
-                placeholder="Search trainings..."
+                placeholder={t('Search trainings...')}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-mint-primary text-sm"
@@ -89,7 +93,7 @@ const Trainings = () => {
             >
               {trainingTypes.map(type => (
                 <option key={type} value={type}>
-                  {type === 'all' ? 'All Types' : type}
+                  {type === 'all' ? t('All Types') : type}
                 </option>
               ))}
             </select>
@@ -152,7 +156,7 @@ const Trainings = () => {
                     to={`/trainings/${training.id}`}
                     className="mt-3 w-full block text-center px-3 py-1.5 bg-mint-primary text-white rounded-md hover:bg-opacity-90 transition-colors text-xs font-medium"
                   >
-                    View Details
+                    {t('View Details')}
                   </Link>
                 </div>
               </motion.div>
@@ -161,15 +165,16 @@ const Trainings = () => {
         ) : (
           <div className="text-center py-16 bg-white rounded-lg shadow-sm">
             <div className="text-5xl mb-3">📚</div>
-            <h3 className="text-lg font-semibold text-gray-700">No Trainings Available</h3>
+            <h3 className="text-lg font-semibold text-gray-700">{t('No Trainings Available')}</h3>
             <p className="text-gray-500 text-sm mt-1">Check back later for new training programs.</p>
             <Link to="/" className="inline-block mt-3 text-mint-primary hover:underline text-sm">
-              Return to Home
+              {t('Return to Home')}
             </Link>
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </PublicLayout>
   );
 };
 

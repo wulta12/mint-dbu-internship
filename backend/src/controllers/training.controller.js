@@ -56,7 +56,8 @@ exports.getById = async (req, res, next) => {
       if (!req.user.department_id) {
         throw new ApiError(400, 'Please select your department in your profile first');
       }
-      if (!training.is_all_departments && training.department_id !== req.user.department_id) {
+      const allowed = await Training.isDepartmentAllowed(training, req.user.department_id);
+      if (!allowed) {
         throw new ApiError(403, 'This training is not assigned to your department');
       }
     }
@@ -79,6 +80,13 @@ exports.create = async (req, res, next) => {
     }
 
     const training = await Training.create({ ...req.body, created_by: req.user.id });
+
+    // Optional explicit department assignments (Case B)
+    if (Array.isArray(req.body.department_ids) && req.body.department_ids.length > 0) {
+      await Training.setDepartmentAssignments(training.id, req.body.department_ids);
+      training.department_ids = req.body.department_ids.map(Number);
+    }
+
     res.status(201).json({
       success: true,
       message: 'Training created successfully',
@@ -92,6 +100,11 @@ exports.create = async (req, res, next) => {
 // Admin: update training
 exports.update = async (req, res, next) => {
   try {
+    const existing = await Training.findById(req.params.id);
+    if (!existing) {
+      throw new ApiError(404, 'Training not found');
+    }
+
     if (req.body.subject_id) {
       const subject = await Subject.findById(req.body.subject_id);
       if (!subject) {
@@ -99,14 +112,28 @@ exports.update = async (req, res, next) => {
       }
     }
 
+    // End date must be the same as or after the start date
+    const startDate = req.body.start_date || existing.start_date;
+    const endDate = req.body.end_date || existing.end_date;
+    if (startDate && endDate && new Date(endDate) < new Date(startDate)) {
+      throw new ApiError(400, 'End date must be after the start date');
+    }
+
     const training = await Training.update(req.params.id, req.body);
     if (!training) {
       throw new ApiError(404, 'Training not found');
     }
+
+    // Optional explicit department assignments (Case B)
+    if (Array.isArray(req.body.department_ids)) {
+      await Training.setDepartmentAssignments(training.id, req.body.department_ids);
+    }
+
+    const updated = await Training.findById(req.params.id);
     res.json({
       success: true,
       message: 'Training updated successfully',
-      data: { training }
+      data: { training: updated }
     });
   } catch (error) {
     next(error);

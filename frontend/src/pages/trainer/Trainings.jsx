@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar, Users, ArrowLeft, Search, Filter, BookOpen, FolderOpen, ClipboardList } from 'lucide-react';
+import { Calendar, Users, ArrowLeft, Search, BookOpen, FolderOpen, ClipboardList, Video } from 'lucide-react';
 import AppLayout from '../../components/AppLayout';
 import { trainingService } from '../../services/api';
 
@@ -157,6 +157,15 @@ const TrainerTrainings = () => {
                   >
                     <ClipboardList className="w-3.5 h-3.5" />
                     Assessment
+                  </Link>
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <Link
+                    to={`/trainer/meetings/${training.id}`}
+                    className="flex-1 text-center px-3 py-2 border border-mint-primary text-mint-primary rounded-lg hover:bg-mint-primary hover:text-white transition text-sm inline-flex items-center justify-center gap-1"
+                  >
+                    <Video className="w-3.5 h-3.5" />
+                    Live Meetings
                   </Link>
                 </div>
               </div>

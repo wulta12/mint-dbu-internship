@@ -34,8 +34,8 @@ exports.createTrainingValidation = [
     .notEmpty().withMessage('End date is required')
     .isISO8601().withMessage('End date must be a valid date')
     .custom((value, { req }) => {
-      if (new Date(value) <= new Date(req.body.start_date)) {
-        throw new Error('End date must be after start date');
+      if (new Date(value) < new Date(req.body.start_date)) {
+        throw new Error('End date must be after the start date');
       }
       return true;
     }),
@@ -48,7 +48,9 @@ exports.createTrainingValidation = [
     .optional()
     .isIn(['draft', 'open', 'closed', 'in_progress', 'completed']).withMessage('Invalid status'),
 
-  body('trainer_id').optional({ values: 'falsy' }).isInt().withMessage('Invalid trainer')
+  body('trainer_id').optional({ values: 'falsy' }).isInt().withMessage('Invalid trainer'),
+  body('department_ids').optional().isArray().withMessage('Departments must be a list'),
+  body('department_ids.*').optional().isInt({ min: 1 }).withMessage('Invalid department')
 ];
 
 exports.updateTrainingValidation = [
@@ -59,8 +61,18 @@ exports.updateTrainingValidation = [
   body('training_type').optional().isIn(['Online', 'Offline', 'Hybrid']).withMessage('Training type must be Online, Offline, or Hybrid'),
   body('location_or_meeting_link').optional({ nullable: true }).isLength({ max: 255 }).withMessage('Location/link too long'),
   body('start_date').optional().isISO8601().withMessage('Start date must be a valid date'),
-  body('end_date').optional().isISO8601().withMessage('End date must be a valid date'),
+  body('end_date')
+    .optional()
+    .isISO8601().withMessage('End date must be a valid date')
+    .custom((value, { req }) => {
+      if (req.body.start_date && new Date(value) < new Date(req.body.start_date)) {
+        throw new Error('End date must be after the start date');
+      }
+      return true;
+    }),
   body('capacity').optional({ values: 'falsy' }).isInt({ min: 1 }).withMessage('Capacity must be a positive number'),
   body('status').optional().isIn(['draft', 'open', 'closed', 'in_progress', 'completed']).withMessage('Invalid status'),
-  body('trainer_id').optional({ values: 'falsy' }).isInt().withMessage('Invalid trainer')
+  body('trainer_id').optional({ values: 'falsy' }).isInt().withMessage('Invalid trainer'),
+  body('department_ids').optional().isArray().withMessage('Departments must be a list'),
+  body('department_ids.*').optional().isInt({ min: 1 }).withMessage('Invalid department')
 ];

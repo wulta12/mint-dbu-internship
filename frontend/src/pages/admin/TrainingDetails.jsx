@@ -1,17 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Calendar, Users, MapPin, ArrowLeft, Edit, Trash2 } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Video } from 'lucide-react';
 import AppLayout from '../../components/AppLayout';
 import { trainingService } from '../../services/api';
+import MeetingsManager from '../../components/MeetingsManager';
 import mintLogo from '../../images/mint-logo.png';
 import { toast } from '../../components/Toast';
 import { confirm } from '../../components/ConfirmDialog';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 const TrainingDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [training, setTraining] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showMeetings, setShowMeetings] = useState(false);
 
   useEffect(() => {
     fetchTraining();
@@ -171,6 +175,28 @@ const TrainingDetails = () => {
             <p className="text-mint-primary">{training.current_participants || 0} participants registered</p>
           </div>
         </div>
+      </div>
+
+      {/* Live meetings for this training. Collapsed by default so the
+          existing training detail view is unchanged until an admin asks
+          for it. Admin may manage meetings on ANY training. */}
+      <div className="bg-white rounded-xl shadow-card overflow-hidden mt-6">
+        <button
+          onClick={() => setShowMeetings((v) => !v)}
+          className="w-full flex items-center justify-between p-6 text-left hover:bg-mint-light transition"
+        >
+          <span className="flex items-center gap-2">
+            <Video className="w-5 h-5 text-mint-primary" />
+            <span className="text-lg font-bold text-mint-primary">{t('Live Meetings')}</span>
+          </span>
+          <span className="text-sm text-mint-gray">{showMeetings ? t('Hide') : t('Manage')}</span>
+        </button>
+
+        {showMeetings && (
+          <div className="p-6 pt-0">
+            <MeetingsManager trainingId={id} />
+          </div>
+        )}
       </div>
     </AppLayout>
   );

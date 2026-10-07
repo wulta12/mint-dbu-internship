@@ -1,21 +1,162 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
-import { authService } from '../services/api';
+import { Mail, Lock } from 'lucide-react';
+import { authService, API_URL } from '../services/api';
 import Spinner from '../components/Spinner';
+import LanguageSwitcher from '../components/LanguageSwitcher';
+import { useLanguage } from '../i18n/LanguageContext';
+
+const GoogleIcon = () => (
+  <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
+    <path
+      fill="#4285F4"
+      d="M23.52 12.27c0-.85-.08-1.67-.22-2.45H12v4.64h6.46a5.52 5.52 0 0 1-2.4 3.62v3h3.87c2.27-2.09 3.58-5.17 3.58-8.81z"
+    />
+    <path
+      fill="#34A853"
+      d="M12 24c3.24 0 5.96-1.08 7.94-2.91l-3.87-3c-1.08.72-2.45 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.28v3.1A12 12 0 0 0 12 24z"
+    />
+    <path
+      fill="#FBBC05"
+      d="M5.27 14.28a7.2 7.2 0 0 1 0-4.56v-3.1H1.28a12 12 0 0 0 0 10.76l3.99-3.1z"
+    />
+    <path
+      fill="#EA4335"
+      d="M12 4.76c1.77 0 3.35.61 4.6 1.8l3.43-3.43C17.95 1.19 15.24 0 12 0A12 12 0 0 0 1.28 6.62l3.99 3.1C6.22 6.87 8.87 4.76 12 4.76z"
+    />
+  </svg>
+);
 
 const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useLanguage();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleEnabled, setGoogleEnabled] = useState(false);
 
   // Get message from location state (from registration or training redirect)
   const redirectMessage = location.state?.message || '';
+
+  // Store the session and send the user where they were headed. Shared by the
+  // password form and the Google callback so both resolve the role dashboard,
+  // the pending redirect and the token/user writes in exactly one place.
+  const completeSignIn = useCallback(
+    (token, user) => {
+      if (!token || !user) {
+        setError(t('Login failed. Please try again.'));
+        return false;
+      }
+
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
+
+      const savedToken = localStorage.getItem('token');
+      const savedUser = localStorage.getItem('user');
+      if (!savedToken || !savedUser) {
+        console.error('Failed to save session to localStorage');
+        setError(t('Login failed. Please try again.'));
+        return false;
+      }
+
+      // A redirect saved before sign-in (from training registration) wins.
+      const redirectUrl = localStorage.getItem('redirectAfterLogin');
+
+      let dashboardPath = '/';
+      if (user.role === 'admin') {
+        dashboardPath = '/admin/dashboard';
+      } else if (user.role === 'trainer') {
+        dashboardPath = '/trainer/dashboard';
+      } else if (user.role === 'trainee') {
+        dashboardPath = '/trainee/dashboard';
+      }
+
+      localStorage.removeItem('redirectAfterLogin');
+
+      navigate(redirectUrl || dashboardPath, { replace: true });
+      return true;
+    },
+    [navigate, t]
+  );
+
+  // Land here straight out of the Google redirect. The outcome arrives in the
+  // URL fragment (never sent to the server, never in a Referer header).
+  useEffect(() => {
+    const hash = window.location.hash || '';
+    if (!hash.startsWith('#')) return;
+
+    const params = new URLSearchParams(hash.slice(1));
+    const token = params.get('token');
+    const failure = params.get('error');
+    const message = params.get('message');
+
+    if (!token && !failure) return;
+
+    // Drop the fragment before doing anything else, so a refresh cannot
+    // replay the token and it never lingers in the address bar or history.
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+
+    if (failure) {
+      setError(message || t('Sign in with Google failed. Please try again.'));
+      return;
+    }
+
+    // The callback sends only the token. Fetch the profile so the user object
+    // has a single source of truth instead of a second copy in the URL.
+    let cancelled = false;
+    setLoading(true);
+    authService
+      .getProfile()
+      .then((response) => {
+        if (cancelled) return;
+        const user = response?.data?.user || response?.user;
+        if (!completeSignIn(token, user)) return;
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        localStorage.removeItem('token');
+        console.error('Google sign-in failed:', err);
+        setError(
+          err.response?.data?.message ||
+            t('Sign in with Google failed. Please try again.')
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [completeSignIn, t]);
+
+  // Hide the Google button on a deployment with no OAuth client configured,
+  // rather than showing a button that can only ever fail.
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_URL}/auth/google/status`)
+      .then((r) => r.json())
+      .then((body) => {
+        if (!cancelled) setGoogleEnabled(Boolean(body?.data?.enabled));
+      })
+      .catch(() => {
+        if (!cancelled) setGoogleEnabled(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleGoogleSignIn = () => {
+    // A full navigation, not fetch: the browser has to leave for Google and
+    // come back through the backend callback.
+    window.location.href = `${API_URL}/auth/google`;
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -23,73 +164,12 @@ const Login = () => {
     setLoading(true);
 
     try {
-      console.log('🔐 Attempting login for:', email);
-      
       const response = await authService.login(email, password);
-      
-      console.log('✅ Login response:', response);
-      
-      // Check if response has user data
-      if (!response || !response.user) {
-        console.error('❌ No user data in response');
-        setError('Login failed. Please try again.');
-        setLoading(false);
-        return;
-      }
-      
-      console.log('👤 User:', response.user);
-      console.log('📋 Role:', response.user.role);
-      
-      // Save token and user
-      if (response.token) {
-        localStorage.setItem('token', response.token);
-        console.log('✅ Token saved');
-      }
-      
-      if (response.user) {
-        localStorage.setItem('user', JSON.stringify(response.user));
-        console.log('✅ User saved');
-      }
-      
-      // Verify data was saved
-      const savedToken = localStorage.getItem('token');
-      const savedUser = localStorage.getItem('user');
-      console.log('💾 Token exists?', savedToken ? 'Yes' : 'No');
-      console.log('💾 User exists?', savedUser ? 'Yes' : 'No');
-      
-      if (!savedToken || !savedUser) {
-        console.error('❌ Failed to save to localStorage');
-        setError('Login failed. Please try again.');
-        setLoading(false);
-        return;
-      }
-      
-      // Check if there's a redirect URL (from training registration)
-      const redirectUrl = localStorage.getItem('redirectAfterLogin');
-      
-      // Determine dashboard path based on role
-      let dashboardPath = '/';
-      if (response.user.role === 'admin') {
-        dashboardPath = '/admin/dashboard';
-      } else if (response.user.role === 'trainer') {
-        dashboardPath = '/trainer/dashboard';
-      } else if (response.user.role === 'trainee') {
-        dashboardPath = '/trainee/dashboard';
-      }
-      
-      // Use redirect URL if exists, otherwise use dashboard path
-      const finalPath = redirectUrl || dashboardPath;
-      console.log('🚀 Navigating to:', finalPath);
-      
-      // Clear redirect after use
-      localStorage.removeItem('redirectAfterLogin');
-      
-      // Navigate with replace to prevent going back to login
-      navigate(finalPath, { replace: true });
-      
+
+      completeSignIn(response?.token, response?.user);
     } catch (err) {
-      console.error('❌ Login error:', err);
-      
+      console.error('Login error:', err);
+
       // Show specific error message
       if (err.response?.data?.message) {
         setError(err.response.data.message);
@@ -116,13 +196,16 @@ const Login = () => {
         className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full"
       >
         <div className="text-center mb-8">
+          <div className="flex justify-center mb-4">
+            <LanguageSwitcher dark={false} />
+          </div>
           <div className="mb-4">
             <h1 className="text-3xl font-bold text-mint-primary">MinT</h1>
-            <p className="text-mint-gray text-sm font-medium">Ministry of Innovation and Technology</p>
+            <p className="text-mint-gray text-sm font-medium">{t('Ministry of Innovation and Technology')}</p>
             <p className="text-gray-400 text-xs mt-1">Ethiopia</p>
           </div>
-          <h2 className="text-2xl font-bold text-gray-800">Welcome Back</h2>
-          <p className="text-gray-500 text-sm mt-1">Sign in to your account</p>
+          <h2 className="text-2xl font-bold text-gray-800">{t('Welcome Back')}</h2>
+          <p className="text-gray-500 text-sm mt-1">{t('Sign in to your account')}</p>
         </div>
 
         {/* Show success message from registration */}
@@ -140,27 +223,31 @@ const Login = () => {
 
         <form onSubmit={handleSubmit} autoComplete="off">
           <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-semibold mb-2">Email Address</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Enter your email"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-mint-primary focus:border-transparent transition-all text-gray-800"
-              autoComplete="off"
-              required
-            />
+            <label className="block text-gray-700 text-sm font-semibold mb-2">{t('Email Address')}</label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder={t('Enter your email')}
+                className="w-full pl-11 py-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-mint-primary focus:border-transparent transition-all text-gray-800"
+                autoComplete="off"
+                required
+              />
+            </div>
           </div>
 
           <div className="mb-6">
-            <label className="block text-gray-700 text-sm font-semibold mb-2">Password</label>
+            <label className="block text-gray-700 text-sm font-semibold mb-2">{t('Password')}</label>
             <div className="relative">
+              <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
               <input
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter your password"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-mint-primary focus:border-transparent transition-all text-gray-800 pr-12"
+                placeholder={t('Enter your password')}
+                className="w-full pl-11 py-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-mint-primary focus:border-transparent transition-all text-gray-800"
                 autoComplete="new-password"
                 required
               />
@@ -187,37 +274,66 @@ const Login = () => {
             {loading ? (
               <>
                 <Spinner size="sm" />
-                Logging in...
+                {t('Logging in...')}
               </>
             ) : (
-              'Sign In'
+              t('Sign In')
             )}
           </button>
+
+          {/* Google is an additional way into an account that already exists.
+              It never creates one, so the hint points people with no account
+              at registration rather than letting them hit a dead end. */}
+          {googleEnabled && (
+            <>
+              <div className="flex items-center gap-3 my-5">
+                <div className="flex-1 h-px bg-gray-200" />
+                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                  {t('or')}
+                </span>
+                <div className="flex-1 h-px bg-gray-200" />
+              </div>
+
+              <button
+                type="button"
+                onClick={handleGoogleSignIn}
+                disabled={loading}
+                className="w-full bg-white border-2 border-gray-200 text-gray-700 py-3 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all font-semibold text-base disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+              >
+                <GoogleIcon />
+                {t('Continue with Google')}
+              </button>
+
+              <p className="mt-3 text-xs text-gray-500 text-center leading-relaxed">
+                {t(
+                  'Google sign-in requires an existing MinT account. Register with your email and password first if you do not have one.'
+                )}
+              </p>
+            </>
+          )}
         </form>
 
-        {/* Demo Credentials */}
-        <div className="mt-6 p-3 bg-gray-50 rounded-lg border border-gray-200">
-          <p className="text-xs text-center text-gray-500 font-semibold mb-2">Demo Credentials</p>
-          <div className="text-xs text-gray-600 space-y-1">
-            <p><span className="font-semibold">Admin:</span> admin@mint.gov.et</p>
-            <p><span className="font-semibold">Trainer:</span> samuel@mint.gov.et</p>
-            <p><span className="font-semibold">Trainee:</span> abebe@test.com</p>
-            <p className="text-gray-400 mt-1">Password for all: <span className="font-mono">password123</span></p>
-          </div>
+        <div className="mt-4 text-center">
+          <Link
+            to="/forgot-password"
+            className="text-sm text-mint-primary font-semibold hover:underline transition-all"
+          >
+            {t('Forgot Password?')}
+          </Link>
         </div>
 
         <div className="mt-6 text-center">
           <p className="text-sm text-gray-600">
-            Don't have an account?{' '}
+            {t("Don't have an account?")}{' '}
             <Link to="/register" className="text-mint-primary font-semibold hover:underline transition-all">
-              Register
+              {t('Register')}
             </Link>
           </p>
           <Link 
             to="/" 
             className="text-sm text-mint-primary hover:text-mint-primary/80 hover:underline transition-all inline-block mt-3"
           >
-            ← Back to Home
+            ← {t('Back to Home')}
           </Link>
         </div>
       </motion.div>

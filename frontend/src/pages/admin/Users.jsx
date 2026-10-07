@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Search, UserCheck, UserX, UserCog, Lock } from 'lucide-react';
+import { Search, UserCheck, UserX, Lock } from 'lucide-react';
 import AppLayout from '../../components/AppLayout';
 import { userService, departmentService } from '../../services/api';
 import { toast } from '../../components/Toast';

@@ -33,58 +33,30 @@ const TraineeDashboard = () => {
     }
   }, []);
 
+  // One endpoint returns every card plus the recent list.
+  //
+  // This used to be assembled client-side from three calls, counting
+  // "Completed" by the enrollment's stored status. That status only becomes
+  // 'completed' on certificate issuance or a manual admin action, so finishing
+  // every lesson of a training still showed 0. The server derives it from real
+  // lesson progress instead.
   const fetchTraineeStats = async () => {
     try {
       setLoading(true);
 
-      let total = 0;
-      try {
-        const deptResponse = await api.get('/trainings/department/mine');
-        if (deptResponse.data.success) {
-          total = (deptResponse.data.data?.trainings || []).length;
-        }
-      } catch (err) {
-        console.warn('No department trainings (no department selected?):', err);
-      }
+      const response = await api.get('/dashboard/trainee');
+      const d = response.data?.data || {};
 
-      try {
-        const myTrainingsResponse = await api.get('/training-requests/my');
-        const registeredTrainings = myTrainingsResponse.data.data?.requests || [];
-        
-        const enrolled = registeredTrainings.length;
-        const completed = registeredTrainings.filter(t => t.status === 'completed').length;
-        
-        try {
-          const certificatesResponse = await api.get('/certificates/my');
-          const certificates = certificatesResponse.data.data?.certificates || [];
-          
-          setStats({
-            totalTrainings: total,
-            enrolledTrainings: enrolled,
-            completedTrainings: completed,
-            certificates: certificates.length,
-            recentTrainings: registeredTrainings.slice(0, 4)
-          });
-        } catch (err) {
-          setStats({
-            totalTrainings: total,
-            enrolledTrainings: enrolled,
-            completedTrainings: completed,
-            certificates: 0,
-            recentTrainings: registeredTrainings.slice(0, 4)
-          });
-        }
-      } catch (err) {
-        setStats({
-          totalTrainings: total,
-          enrolledTrainings: 0,
-          completedTrainings: 0,
-          certificates: 0,
-          recentTrainings: []
-        });
-      }
+      setStats({
+        totalTrainings: d.totalTrainings ?? 0,
+        enrolledTrainings: d.enrolledTrainings ?? 0,
+        completedTrainings: d.completedTrainings ?? 0,
+        certificates: d.certificates ?? 0,
+        recentTrainings: d.recentTrainings || []
+      });
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Error fetching trainee stats:', error);
+      setStats((prev) => ({ ...prev, recentTrainings: prev.recentTrainings || [] }));
     } finally {
       setLoading(false);
     }
@@ -260,13 +232,21 @@ const TraineeDashboard = () => {
                   </div>
                   <div className="flex items-center gap-2 ml-4 shrink-0">
                     <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-                      training.status === 'open' ? 'bg-green-50 text-green-700' :
-                      training.status === 'in_progress' ? 'bg-blue-50 text-blue-700' :
-                      training.status === 'completed' ? 'bg-gray-100 text-gray-600' :
+                      training.status === 'pending' ? 'bg-yellow-50 text-yellow-700' :
                       training.status === 'approved' ? 'bg-green-50 text-green-700' :
+                      training.status === 'rejected' ? 'bg-red-50 text-red-700' :
+                      training.status === 'cancelled' ? 'bg-gray-100 text-gray-600' :
+                      training.status === 'completed' ? 'bg-purple-50 text-purple-700' :
+                      training.status === 'in_progress' ? 'bg-blue-50 text-blue-700' :
+                      training.status === 'open' ? 'bg-green-50 text-green-700' :
                       'bg-gray-100 text-gray-600'
                     }`}>
-                      {training.status || 'Open'}
+                      {training.status === 'pending' ? 'Pending Approval' :
+                       training.status === 'approved' ? 'Enrolled' :
+                       training.status === 'rejected' ? 'Rejected' :
+                       training.status === 'cancelled' ? 'Cancelled' :
+                       training.status === 'completed' ? 'Completed' :
+                       training.status || 'Open'}
                     </span>
                     {(training.status === 'approved' || training.status === 'completed') && (
                       <Link

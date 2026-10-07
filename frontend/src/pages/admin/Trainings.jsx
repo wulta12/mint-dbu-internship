@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { 
-  Plus, Edit, Trash2, Eye, 
-  BookOpen, Calendar, Users, Search
+import {
+  Plus, Edit, Trash2, Eye,
+  BookOpen, Search
 } from 'lucide-react';
 import AppLayout from '../../components/AppLayout';
 import { trainingService } from '../../services/api';

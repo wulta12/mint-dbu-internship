@@ -8,7 +8,6 @@ const { notFound, errorHandler } = require('./middleware/error');
 const { auth, authorize } = require('./middleware/auth');
 const userController = require('./controllers/user.controller');
 
-// Import routes
 const authRoutes = require('./routes/auth.routes');
 const departmentRoutes = require('./routes/department.routes');
 const subjectRoutes = require('./routes/subject.routes');
@@ -19,9 +18,15 @@ const dashboardRoutes = require('./routes/dashboard.routes');
 const certificateRoutes = require('./routes/certificate.routes');
 const materialRoutes = require('./routes/material.routes');
 const attendanceRoutes = require('./routes/attendance.routes');
+const meetingRoutes = require('./routes/meeting.routes');
 const reportsRoutes = require('./routes/reports.routes');
 const learningRoutes = require('./routes/learning.routes');
 const assessmentRoutes = require('./routes/assessment.routes');
+const assistantRoutes = require('./routes/assistant.routes');
+const contactRoutes = require('./routes/contact.routes');
+const internalMessageRoutes = require('./routes/internalMessage.routes');
+const settingsRoutes = require('./routes/settings.routes');
+const notificationRoutes = require('./routes/notification.routes');
 
 dotenv.config();
 
@@ -58,9 +63,15 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/certificates', certificateRoutes);
 app.use('/api', materialRoutes);
 app.use('/api/attendance', attendanceRoutes);
+app.use('/api/meeting', meetingRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/learning', learningRoutes);
 app.use('/api/assessment', assessmentRoutes);
+app.use('/api/assistant', assistantRoutes);
+app.use('/api/contact', contactRoutes);
+app.use('/api/internal-messages', internalMessageRoutes);
+app.use('/api/settings', settingsRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Admin: list all trainees
 app.get('/api/trainees', auth, authorize('admin'), userController.getTrainees);
@@ -85,3 +96,4 @@ if (require.main === module) {
 }
 
 module.exports = app;
+

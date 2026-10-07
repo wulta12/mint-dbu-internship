@@ -1,31 +1,62 @@
 const Certificate = require('../models/Certificate.model');
 const Training = require('../models/Training.model');
 const TrainingRequest = require('../models/TrainingRequest.model');
+const LearningContent = require('../models/LearningContent.model');
+const Assessment = require('../models/Assessment.model');
+const Notification = require('../models/Notification.model');
 const QRCode = require('qrcode');
 const { ApiError } = require('../middleware/error');
+const { certificateVerifyUrl } = require('../config/app.config');
 
-// Public: verify a certificate by verification code (also used by the QR code)
+const MIN_PROGRESS_FOR_CERTIFICATE = 75;
+
+// ------------------------------------------------------------------
+// Public verification. No authentication, and no private data:
+// the trainee's email is deliberately NOT part of the public payload.
+// Accepts the certificate number (what the QR encodes) or the
+// verification code printed on the certificate.
+// ------------------------------------------------------------------
 exports.verify = async (req, res, next) => {
   try {
-    const code = String(req.params.code || '').toUpperCase();
-    const certificate = await Certificate.findByVerificationCode(code);
-    if (!certificate) {
-      throw new ApiError(404, 'Certificate not found or verification code is invalid');
+    const reference = String(req.params.code || '').trim();
+    if (!reference) {
+      throw new ApiError(400, 'A certificate number or verification code is required');
     }
+
+    const certificate = await Certificate.findByReference(reference);
+
+    if (!certificate) {
+      // Unknown reference: 404 so the page can render an explicit
+      // "not found" state.
+      throw new ApiError(404, 'No certificate matches that number or code.');
+    }
+
+    const isValid = certificate.status === 'valid' || certificate.status === null || certificate.status === undefined;
+
     res.json({
       success: true,
       data: {
-        verified: true,
+        // The page shows VALID / INVALID from this single flag.
+        verified: isValid,
+        status: isValid ? 'valid' : certificate.status,
+        message: isValid
+          ? 'This certificate is valid and was issued by the Ministry of Innovation and Technology.'
+          : certificate.status === 'revoked'
+            ? 'This certificate has been revoked and is no longer valid.'
+            : 'This certificate is not valid.',
         certificate: {
           certificate_number: certificate.certificate_number,
           verification_code: certificate.verification_code,
           trainee_name: certificate.trainee_name,
-          trainee_email: certificate.trainee_email,
           training_title: certificate.training_title,
+          training_type: certificate.training_type,
+          trainer_name: certificate.trainer_name,
           department_name: certificate.department_name,
           issue_date: certificate.issue_date,
           start_date: certificate.start_date,
-          end_date: certificate.end_date
+          end_date: certificate.end_date,
+          revoked_at: certificate.revoked_at,
+          revoked_reason: certificate.revoked_reason
         }
       }
     });
@@ -61,6 +92,9 @@ exports.getByTraining = async (req, res, next) => {
     if (!training) {
       throw new ApiError(404, 'Training not found');
     }
+    if (req.user.role === 'trainer' && Number(training.trainer_id) !== Number(req.user.id)) {
+      throw new ApiError(403, 'You can only view certificates for trainings assigned to you');
+    }
     const certificates = await Certificate.findByTraining(req.params.trainingId);
     res.json({ success: true, data: { certificates } });
   } catch (error) {
@@ -68,7 +102,10 @@ exports.getByTraining = async (req, res, next) => {
   }
 };
 
-// Admin / Trainer: issue a certificate to an eligible (approved/completed) trainee
+// Admin / Trainer: issue a certificate to an eligible trainee.
+//
+// The name printed on the certificate always comes from the trainee's
+// user record (first_name + last_name), never from the request body.
 exports.issue = async (req, res, next) => {
   try {
     const trainingId = req.params.trainingId;
@@ -83,28 +120,85 @@ exports.issue = async (req, res, next) => {
       throw new ApiError(404, 'Training not found');
     }
 
+    if (req.user.role === 'trainer' && Number(training.trainer_id) !== Number(req.user.id)) {
+      throw new ApiError(403, 'You can only issue certificates for trainings assigned to you');
+    }
+
     const enrolled = await TrainingRequest.isEnrolled(trainingId, traineeId);
     if (!enrolled) {
       throw new ApiError(400, 'Trainee is not an enrolled participant of this training');
     }
 
-    const existing = await Certificate.findByTraining(trainingId);
-    if (existing.some((c) => c.trainee_id === Number(traineeId))) {
+    const existing = await Certificate.getForTrainee(trainingId, traineeId);
+    if (existing) {
       throw new ApiError(400, 'A certificate has already been issued to this trainee');
+    }
+
+    // Requirements are checked server-side. A certificate is only issued
+    // once the trainee has passed the assessment AND completed at least
+    // 75% of the training content.
+    const progress = await LearningContent.getTrainingProgress(trainingId, traineeId);
+    if (progress.percent < MIN_PROGRESS_FOR_CERTIFICATE) {
+      throw new ApiError(
+        400,
+        `Trainee has completed ${progress.percent}% of the training. At least ${MIN_PROGRESS_FOR_CERTIFICATE}% is required to issue a certificate.`
+      );
+    }
+
+    const passed = await Assessment.hasPassed(trainingId, traineeId);
+    if (!passed) {
+      throw new ApiError(400, 'Trainee has not passed the final assessment yet');
     }
 
     const certificate = await Certificate.create(trainingId, traineeId, req.user.id);
 
-    const request = await TrainingRequest.findEnrolled(trainingId, traineeId);
-    if (request && request.status === 'approved') {
-      await TrainingRequest.markCompleted(request.id);
-    }
+    // Keep the enrollment in step with the certificate: 'approved' ->
+    // 'completed'. This is the only place the trainee dashboard reads, so
+    // skipping it made "Certificates" and "Completed" disagree.
+    await TrainingRequest.markCompletedForTrainee(trainingId, traineeId);
+
+    // Best effort: the certificate is already issued either way.
+    Notification.notifyUser(traineeId, {
+      type: 'certificate_issued',
+      title: 'Certificate issued',
+      message: `Your certificate for "${training.training_title}" is ready.`,
+      link: '/trainee/certificates'
+    }).catch((err) => console.error('Notification error:', err.message));
 
     res.status(201).json({
       success: true,
       message: 'Certificate issued successfully',
       data: { certificate }
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Admin: revoke a certificate. Revoked certificates report as INVALID
+// on the public verification page.
+exports.revoke = async (req, res, next) => {
+  try {
+    const certificate = await Certificate.findById(req.params.id);
+    if (!certificate) {
+      throw new ApiError(404, 'Certificate not found');
+    }
+    const revoked = await Certificate.revoke(certificate.id, req.body.reason, req.user.id);
+    if (!revoked) {
+      throw new ApiError(400, 'This certificate has already been revoked');
+    }
+
+    // Best effort: the revocation itself has already been committed.
+    Notification.notifyUser(certificate.trainee_id, {
+      type: 'certificate_revoked',
+      title: 'Certificate revoked',
+      message: req.body.reason
+        ? `Your certificate ${certificate.certificate_number} was revoked: ${req.body.reason}`
+        : `Your certificate ${certificate.certificate_number} was revoked.`,
+      link: '/trainee/certificates'
+    }).catch((err) => console.error('Notification error:', err.message));
+
+    res.json({ success: true, message: 'Certificate revoked successfully', data: { certificate: revoked } });
   } catch (error) {
     next(error);
   }
@@ -123,16 +217,15 @@ exports.download = async (req, res, next) => {
       throw new ApiError(403, 'You do not have permission to view this certificate');
     }
 
-    const date = new Date(certificate.issue_date).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
+    const date = formatDate(certificate.issue_date);
+    const isRevoked = certificate.status && certificate.status !== 'valid';
 
-    const verifyBase = `${req.protocol}://${req.get('host')}/api/certificates/verify/${encodeURIComponent(certificate.verification_code || certificate.certificate_number)}`;
+    // The QR encodes ONLY the public verification URL for the certificate
+    // number. No API endpoint, no personal data.
+    const verifyUrl = certificateVerifyUrl(certificate.certificate_number);
     let qrDataUrl = '';
     try {
-      qrDataUrl = await QRCode.toDataURL(verifyBase, { width: 180, margin: 1, color: { dark: '#0b3d2e', light: '#ffffff' } });
+      qrDataUrl = await QRCode.toDataURL(verifyUrl, { width: 180, margin: 1, color: { dark: '#0b3d2e', light: '#ffffff' } });
     } catch (qrErr) {
       // QR generation is optional; continue without it
     }
@@ -155,14 +248,16 @@ exports.download = async (req, res, next) => {
   .body { font-size: 15px; color: #374151; line-height: 1.7; margin: 6px 0; }
   .program { font-size: 22px; color: #0b3d2e; font-weight: bold; margin: 8px 0; }
   .trainer { font-size: 14px; color: #374151; margin-top: 14px; }
-  .info { margin-top: 26px; font-size: 13px; color: #6b7280; line-height: 1.9; }
+  .info { margin-top: 26px; font-size: 13px; color: #374151; line-height: 1.9; }
   .org { margin-top: 34px; font-size: 14px; color: #0b3d2e; font-weight: bold; letter-spacing: 1px; }
   .sigline { margin-top: 40px; color: #9ca3af; font-size: 18px; letter-spacing: 2px; }
   .siglabel { font-size: 13px; color: #374151; margin-top: 4px; }
   .qrwrap { margin-top: 30px; display: flex; justify-content: center; align-items: center; gap: 16px;
     border-top: 1px solid #e5e7eb; padding-top: 20px; }
   .qrwrap img { width: 100px; height: 100px; }
-  .qrtext { text-align: left; font-size: 12px; color: #6b7280; max-width: 380px; }
+  .qrtext { text-align: left; font-size: 12px; color: #374151; max-width: 380px; word-break: break-all; }
+  .revoked { display: inline-block; margin-top: 18px; padding: 8px 20px; border: 2px solid #b91c1c;
+    color: #b91c1c; font-weight: bold; letter-spacing: 2px; }
   @media print { body { padding: 0; background: #fff; } .certificate { box-shadow: none; border-width: 10px; } }
 </style>
 </head>
@@ -182,10 +277,11 @@ exports.download = async (req, res, next) => {
       <div>Verification Code: ${escapeHtml(certificate.verification_code || certificate.certificate_number)}</div>
       <div>Issued on: ${escapeHtml(date)}</div>
     </div>
+    ${isRevoked ? `<div class="revoked">REVOKED</div>` : ''}
     <div class="org">Ministry of Innovation and Technology</div>
     <div class="sigline">________________________</div>
     <div class="siglabel">Authorized Signature</div>
-    ${qrDataUrl ? `<div class="qrwrap"><img src="${qrDataUrl}" alt="QR code" /><div class="qrtext">Scan to verify this certificate. You can also verify it online at:<br />${escapeHtml(verifyBase)}</div></div>` : ''}
+    ${qrDataUrl ? `<div class="qrwrap"><img src="${qrDataUrl}" alt="QR code" /><div class="qrtext">Scan to verify this certificate online:<br />${escapeHtml(verifyUrl)}</div></div>` : ''}
   </div>
 </body>
 </html>`;

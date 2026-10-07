@@ -2,38 +2,26 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
-  FaGraduationCap,
-  FaUserTie,
   FaCertificate,
   FaLaptopCode,
   FaShieldAlt,
   FaChartLine,
   FaUsers,
   FaAward,
-  FaClipboardCheck,
   FaCalendarAlt,
   FaGlobeAfrica,
   FaArrowRight,
-  FaFacebook,
-  FaLinkedin,
-  FaTelegram,
-  FaTwitter,
-  FaHome,
-  FaInfoCircle,
-  FaBookOpen,
-  FaEnvelope,
-  FaSignInAlt,
   FaUserPlus,
-  FaUniversity,
+  FaBookOpen,
   FaChalkboardTeacher
 } from 'react-icons/fa';
 import api from '../services/api';
-
-// Import your images
-import mintLogo from '../images/mint-logo.png';
+import PublicLayout from '../components/PublicLayout';
+import { useLanguage } from '../i18n/LanguageContext';
 import heroImage from '../images/gg.png';
 
 const Home = () => {
+  const { t } = useLanguage();
   const [stats, setStats] = useState({
     trainers: 0,
     trainees: 0,
@@ -68,67 +56,7 @@ const Home = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-mint-light font-sans">
-      {/* ========== NAVBAR ========== */}
-      <header className="bg-mint-primary shadow-lg sticky top-0 z-50">
-        <div className="container mx-auto px-4">
-          <div className="flex justify-between items-center h-20">
-            {/* Logo */}
-            <Link to="/" className="flex items-center gap-3">
-              <div className="bg-white rounded-lg p-1">
-                <img 
-                  src={mintLogo} 
-                  alt="MinT Logo" 
-                  className="h-10 w-auto object-contain"
-                />
-              </div>
-              <div>
-                <div className="text-white font-bold text-sm leading-tight tracking-wide">
-                  Ministry of Innovation
-                </div>
-                <div className="text-mint-gold font-semibold text-xs tracking-wider">
-                  Training Management System
-                </div>
-              </div>
-            </Link>
-
-            {/* Navigation Links */}
-            <div className="flex items-center gap-6">
-              <nav className="hidden lg:flex items-center gap-4">
-                <Link to="/" className="flex items-center gap-1.5 text-white/80 hover:text-mint-gold transition-colors font-medium text-sm tracking-wide">
-                  <FaHome className="text-white" />
-                  Home
-                </Link>
-                <Link to="/about" className="flex items-center gap-1.5 text-white/80 hover:text-mint-gold transition-colors font-medium text-sm tracking-wide">
-                  <FaInfoCircle className="text-white" />
-                  About
-                </Link>
-                <Link to="/trainings" className="flex items-center gap-1.5 text-white/80 hover:text-mint-gold transition-colors font-medium text-sm tracking-wide">
-                  <FaBookOpen className="text-white" />
-                  Training Programs
-                </Link>
-                <Link to="/contact" className="flex items-center gap-1.5 text-white/80 hover:text-mint-gold transition-colors font-medium text-sm tracking-wide">
-                  <FaEnvelope className="text-white" />
-                  Contact
-                </Link>
-              </nav>
-
-              {/* Auth Buttons */}
-              <div className="flex items-center gap-2">
-                <Link to="/login" className="flex items-center gap-1.5 px-4 py-2 text-white border border-white/30 rounded-lg hover:bg-white/10 transition-colors text-sm font-medium tracking-wide">
-                  <FaSignInAlt className="text-white" />
-                  Login
-                </Link>
-                <Link to="/register" className="flex items-center gap-1.5 px-4 py-2 bg-mint-gold text-mint-primary rounded-lg hover:bg-opacity-90 transition-colors text-sm font-medium tracking-wide">
-                  <FaUserPlus className="text-white" />
-                  Register
-                </Link>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
-
+    <PublicLayout>
       {/* ========== FULL PAGE HERO SECTION ========== */}
       <section className="relative h-[calc(100vh-80px)] overflow-hidden">
         <div className="absolute inset-0">
@@ -149,12 +77,12 @@ const Home = () => {
               className="max-w-4xl mx-auto"
             >
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight mb-2 tracking-tight">
-                Online Training Management
-                <span className="text-white block">System</span>
+                {t('Online Training Management')}
+                <span className="text-white block">{t('System')}</span>
               </h1>
 
               <p className="text-mint-gold text-sm md:text-base lg:text-lg font-medium tracking-wider mb-6">
-                Ministry of Innovation and Technology, Ethiopia
+                {t('Ministry of Innovation and Technology, Ethiopia')}
               </p>
 
               <p className="text-white/80 text-lg mb-8 max-w-2xl mx-auto leading-relaxed tracking-wide">
@@ -163,10 +91,10 @@ const Home = () => {
 
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Link to="/trainings" className="px-8 py-3 bg-mint-gold text-mint-primary rounded-lg hover:bg-opacity-90 transition-all font-semibold inline-flex items-center gap-2 tracking-wide">
-                  Explore Courses <FaArrowRight />
+                  {t('Explore Courses')} <FaArrowRight />
                 </Link>
                 <Link to="/register" className="px-8 py-3 border-2 border-white/40 text-white rounded-lg hover:bg-white/10 transition-all font-semibold inline-flex items-center gap-2 tracking-wide">
-                  <FaUserPlus /> Get Started
+                  <FaUserPlus /> {t('Get Started')}
                 </Link>
               </div>
             </motion.div>
@@ -182,25 +110,25 @@ const Home = () => {
               { 
                 icon: FaUsers, 
                 key: 'trainers',
-                label: 'Registered Trainers',
+                label: t('Registered Trainers'),
                 suffix: '+'
               },
               { 
                 icon: FaChalkboardTeacher, 
                 key: 'trainees',
-                label: 'Trainees',
+                label: t('Trainees'),
                 suffix: '+'
               },
               { 
                 icon: FaBookOpen, 
                 key: 'trainings',
-                label: 'Training Courses',
+                label: t('Training Courses'),
                 suffix: '+'
               },
               { 
                 icon: FaCertificate, 
                 key: 'certificates',
-                label: 'Certification Users',
+                label: t('Certification Users'),
                 suffix: ''
               }
             ].map((stat, index) => (
@@ -231,7 +159,7 @@ const Home = () => {
             transition={{ duration: 0.6 }}
             className="text-center mb-12"
           >
-            <h2 className="text-3xl font-bold text-mint-primary tracking-tight">Why Choose Our Platform?</h2>
+            <h2 className="text-3xl font-bold text-mint-primary tracking-tight">{t('Why Choose Our Platform?')}</h2>
             <p className="text-mint-gray mt-3 max-w-2xl mx-auto tracking-wide text-lg">
               Modern digital learning platform designed by the Ministry of Innovation and Technology.
             </p>
@@ -266,7 +194,7 @@ const Home = () => {
       <section className="py-16 bg-white">
         <div className="container mx-auto px-4">
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-mint-primary tracking-tight">Featured Training Programs</h2>
+            <h2 className="text-3xl font-bold text-mint-primary tracking-tight">{t('Featured Training Programs')}</h2>
             <p className="text-mint-gray mt-2 tracking-wide">Start your learning journey with our most popular programs</p>
           </div>
 
@@ -294,7 +222,7 @@ const Home = () => {
                   </span>
                 </div>
                 <Link to="/register" className="mt-4 w-full block text-center px-4 py-2 bg-mint-primary text-white rounded-lg hover:bg-opacity-90 transition-colors text-sm font-medium tracking-wide">
-                  Register Now
+                  {t('Register Now')}
                 </Link>
               </motion.div>
             ))}
@@ -306,7 +234,7 @@ const Home = () => {
       <section className="py-16 bg-white">
         <div className="container mx-auto px-4">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-800">Our Services</h2>
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-800">{t('Our Services')}</h2>
             <p className="text-gray-500 mt-2">Comprehensive training management solutions</p>
             <div className="w-20 h-1 bg-mint-primary mx-auto mt-4 rounded-full"></div>
           </div>
@@ -358,57 +286,7 @@ const Home = () => {
           </div>
         </div>
       </section>
-
-      {/* ========== FOOTER ========== */}
-      <footer className="bg-mint-primary border-t border-white/10 pt-12 pb-4">
-        <div className="container mx-auto px-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
-            <div>
-              <h3 className="text-white font-bold text-lg mb-4 tracking-wide">MinT</h3>
-              <p className="text-white/60 text-sm tracking-wide">
-                Ministry of Innovation and Technology - Training Management System
-              </p>
-            </div>
-
-            <div>
-              <h3 className="text-white font-semibold mb-4 text-sm tracking-wide">Quick Links</h3>
-              <ul className="space-y-2 text-sm">
-                <li><Link to="/about" className="text-white/60 hover:text-mint-gold transition-colors tracking-wide">About Us</Link></li>
-                <li><Link to="/trainings" className="text-white/60 hover:text-mint-gold transition-colors tracking-wide">Training Programs</Link></li>
-                <li><Link to="/contact" className="text-white/60 hover:text-mint-gold transition-colors tracking-wide">Contact</Link></li>
-              </ul>
-            </div>
-
-            <div>
-              <h3 className="text-white font-semibold mb-4 text-sm tracking-wide">Resources</h3>
-              <ul className="space-y-2 text-sm">
-                <li><Link to="/login" className="text-white/60 hover:text-mint-gold transition-colors tracking-wide">Login</Link></li>
-                <li><Link to="/register" className="text-white/60 hover:text-mint-gold transition-colors tracking-wide">Register</Link></li>
-              </ul>
-            </div>
-
-            <div>
-              <h3 className="text-white font-semibold mb-4 text-sm tracking-wide">Contact</h3>
-              <p className="text-white/60 text-sm tracking-wide">
-                Ministry of Innovation and Technology<br />
-                Addis Ababa, Ethiopia<br />
-                <span className="text-mint-gold">training@mint.gov.et</span>
-              </p>
-              <div className="flex gap-3 mt-4">
-                <a href="#" className="text-white/60 hover:text-mint-gold transition-colors"><FaFacebook /></a>
-                <a href="#" className="text-white/60 hover:text-mint-gold transition-colors"><FaLinkedin /></a>
-                <a href="#" className="text-white/60 hover:text-mint-gold transition-colors"><FaTelegram /></a>
-                <a href="#" className="text-white/60 hover:text-mint-gold transition-colors"><FaTwitter /></a>
-              </div>
-            </div>
-          </div>
-
-          <div className="border-t border-white/10 pt-4 text-center text-sm text-white/40 tracking-wide">
-            &copy; {new Date().getFullYear()} Ministry of Innovation and Technology (MinT). All rights reserved.
-          </div>
-        </div>
-      </footer>
-    </div>
+    </PublicLayout>
   );
 };
 

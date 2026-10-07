@@ -55,11 +55,11 @@ const AdminDashboard = () => {
         setStats(response.data.data);
       }
       
-      // Also fetch trainings count
+      // Also fetch trainings to ensure counts match the training lists
       const trainingsResponse = await api.get('/trainings');
       if (trainingsResponse.data.success) {
         const trainings = trainingsResponse.data.data?.trainings || [];
-        const activeCount = trainings.filter(t => t.status === 'open').length;
+        const activeCount = trainings.filter(t => t.status === 'open' || t.status === 'published').length;
         setStats(prev => ({
           ...prev,
           totalTrainings: trainings.length,

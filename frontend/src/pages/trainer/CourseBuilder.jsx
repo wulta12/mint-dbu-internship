@@ -19,11 +19,13 @@ import {
   Layers,
   Star,
   X,
-  UploadCloud
+  UploadCloud,
+  Bot
 } from 'lucide-react';
 import AppLayout from '../../components/AppLayout';
 import api, { learningService, trainingService } from '../../services/api';
 import { confirm } from '../../components/ConfirmDialog';
+import TrainerAssistantPanel from '../../components/TrainerAssistantPanel';
 
 const LESSON_TYPES = [
   { value: 'text', label: 'Text / Reading', icon: BookOpen },
@@ -76,6 +78,7 @@ const CourseBuilder = () => {
   const [editingLesson, setEditingLesson] = useState(null);
   const [lessonForm, setLessonForm] = useState(emptyLessonForm(''));
   const [lessonFile, setLessonFile] = useState(null);
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const fileInputRef = useRef(null);
 
   const fetchTree = async () => {
@@ -207,6 +210,30 @@ const CourseBuilder = () => {
 
   const setLessonField = (field, value) => {
     setLessonForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  // ---------------- Trainer AI draft handlers ----------------
+  // A draft is only a starting point: it lands in the normal editing form so the
+  // trainer reviews and edits it before anything is saved.
+
+  const useAiLessonDraft = (draft) => {
+    setEditingLesson(null);
+    setLessonForm({
+      ...emptyLessonForm(''),
+      title: draft.title || '',
+      type: 'text',
+      content: draft.content || ''
+    });
+    setLessonFile(null);
+    setLessonModal(true);
+    setAiPanelOpen(false);
+  };
+
+  const useAiModuleDraft = (draft) => {
+    setModuleModal({ editing: null });
+    setModuleTitle(draft.title || '');
+    setModuleDescription(draft.description || '');
+    setAiPanelOpen(false);
   };
 
   const toggleLessonPublish = async (lesson) => {
@@ -412,12 +439,20 @@ const CourseBuilder = () => {
               <h1 className="text-2xl font-bold text-gray-900">Course Builder</h1>
               <p className="text-mint-gray">{training?.training_title || 'Training'}</p>
             </div>
-            <button
-              onClick={openCreateModule}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-mint-primary text-white rounded-lg hover:bg-opacity-90 transition text-sm font-semibold"
-            >
-              <Plus className="w-4 h-4" /> New Module
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setAiPanelOpen(true)}
+                className="flex items-center justify-center gap-2 px-4 py-2.5 border border-mint-primary text-mint-primary rounded-lg hover:bg-mint-light transition text-sm font-semibold"
+              >
+                <Bot className="w-4 h-4" /> AI Assistant
+              </button>
+              <button
+                onClick={openCreateModule}
+                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-mint-primary text-white rounded-lg hover:bg-opacity-90 transition text-sm font-semibold"
+              >
+                <Plus className="w-4 h-4" /> New Module
+              </button>
+            </div>
           </div>
           <div className="mt-2 text-sm text-mint-gray bg-mint-light border border-mint-border rounded-lg px-4 py-3 flex items-start gap-2">
             <AlertCircle className="w-4 h-4 text-mint-primary shrink-0 mt-0.5" />
@@ -508,6 +543,17 @@ const CourseBuilder = () => {
               </div>
             )}
           </div>
+        )}
+
+        {/* ---------- Trainer AI assistant (gated by the admin switch) ---------- */}
+        {aiPanelOpen && (
+          <TrainerAssistantPanel
+            trainingId={trainingId}
+            trainingTitle={training?.training_title}
+            onUseLessonDraft={useAiLessonDraft}
+            onUseModuleDraft={useAiModuleDraft}
+            onClose={() => setAiPanelOpen(false)}
+          />
         )}
 
         {/* ---------- Module modal ---------- */}

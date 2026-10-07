@@ -1,18 +1,24 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import './index.css';
 import ProtectedRoute from './components/ProtectedRoute';
 import ToastProvider from './components/Toast';
 import { ConfirmDialogProvider } from './components/ConfirmDialog';
+import { LanguageProvider } from './i18n/LanguageContext';
+import { ThemeProvider } from './context/ThemeContext';
 
 // Public Pages
 import Home from './pages/Home';
 import About from './pages/About';
 import Contact from './pages/Contact';
+import VerifyCertificate from './pages/VerifyCertificate';
 import Trainings from './pages/Trainings';
 import TrainingDetails from './pages/TrainingDetails';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
+import VerifyOtp from './pages/VerifyOtp';
+import ResetPassword from './pages/ResetPassword';
 
 // Admin Pages
 import AdminDashboard from './pages/admin/Dashboard';
@@ -30,7 +36,10 @@ import Certificates from './pages/admin/Certificates';
 import Reports from './pages/admin/Reports';
 import Settings from './pages/admin/Settings';
 import EnrollmentRequests from './pages/admin/EnrollmentRequests';
+import AdminMessages from './pages/admin/Messages';
 import AdminProfile from './pages/admin/Profile';
+// Shared by trainers and trainees: the inbox an admin's messages land in.
+import Inbox from './pages/Messages';
 
 // Trainee Pages
 import TraineeDashboard from './pages/trainee/Dashboard';
@@ -46,27 +55,55 @@ import Assessment from './pages/trainee/Assessment';
 import TrainerDashboard from './pages/trainer/Dashboard';
 import TrainerTrainings from './pages/trainer/Trainings';
 import TrainerParticipants from './pages/trainer/Participants';
+import TrainerCompleted from './pages/trainer/Completed';
 import TrainerAttendance from './pages/trainer/Attendance';
 import TrainerCertificates from './pages/trainer/Certificates';
 import TrainerProfile from './pages/trainer/Profile';
 import TrainerMaterials from './pages/trainer/Materials';
+import TrainerMeetings from './pages/trainer/Meetings';
 import CourseBuilder from './pages/trainer/CourseBuilder';
 import AssessmentBuilder from './pages/trainer/AssessmentBuilder';
 
+// Notifications link to /messages for everyone. Admins do not use the shared
+// inbox (they read messages on their own portal page), so send them there
+// instead of rendering a recipient view with an empty inbox.
+const InboxRoute = () => {
+  let role = null;
+  try {
+    role = JSON.parse(localStorage.getItem('user') || '{}').role;
+  } catch (error) {
+    role = null;
+  }
+  if (role === 'admin') return <Navigate to="/admin/messages" replace />;
+  return <Inbox />;
+};
+
 function App() {
   return (
-    <Router>
-      <ToastProvider>
-        <ConfirmDialogProvider>
-        <Routes>
+    <ThemeProvider>
+    <LanguageProvider>
+      <Router>
+        <ToastProvider>
+          <ConfirmDialogProvider>
+          <Routes>
         {/* PUBLIC ROUTES */}
         <Route path="/" element={<Home />} />
         <Route path="/about" element={<About />} />
         <Route path="/contact" element={<Contact />} />
+        {/* Public certificate verification. This is the target of the QR code
+            printed on every certificate, so it must stay unauthenticated. */}
+        <Route path="/verify/:code" element={<VerifyCertificate />} />
         <Route path="/trainings" element={<Trainings />} />
         <Route path="/trainings/:id" element={<TrainingDetails />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        {/* Password recovery. /reset-password reads its token from the query
+            string, which is how the emailed link carries it.
+            /verify-otp is the code-based route: it trades a 6-digit code for a
+            short-lived token and then hands off to /reset-password. */}
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/verify-otp" element={<VerifyOtp />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         
         {/* ADMIN ROUTES */}
         <Route path="/admin" element={
@@ -149,6 +186,11 @@ function App() {
             <Reports />
           </ProtectedRoute>
         } />
+        <Route path="/admin/messages" element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <AdminMessages />
+          </ProtectedRoute>
+        } />
         <Route path="/admin/settings" element={
           <ProtectedRoute allowedRoles={['admin']}>
             <Settings />
@@ -157,6 +199,14 @@ function App() {
         <Route path="/admin/profile" element={
           <ProtectedRoute allowedRoles={['admin']}>
             <AdminProfile />
+          </ProtectedRoute>
+        } />
+        
+        {/* SHARED INBOX ROUTE */}
+        {/* Target of the "message" notification type for trainers and trainees. */}
+        <Route path="/messages" element={
+          <ProtectedRoute allowedRoles={['trainer', 'trainee', 'admin']}>
+            <InboxRoute />
           </ProtectedRoute>
         } />
         
@@ -181,6 +231,11 @@ function App() {
             <TrainerParticipants />
           </ProtectedRoute>
         } />
+        <Route path="/trainer/completed" element={
+          <ProtectedRoute allowedRoles={['trainer']}>
+            <TrainerCompleted />
+          </ProtectedRoute>
+        } />
         <Route path="/trainer/attendance/:trainingId" element={
           <ProtectedRoute allowedRoles={['trainer']}>
             <TrainerAttendance />
@@ -194,6 +249,17 @@ function App() {
         <Route path="/trainer/materials/:trainingId" element={
           <ProtectedRoute allowedRoles={['trainer']}>
             <TrainerMaterials />
+          </ProtectedRoute>
+        } />
+        {/* Live meetings for a training assigned to this trainer. */}
+        <Route path="/trainer/meetings/:trainingId" element={
+          <ProtectedRoute allowedRoles={['trainer']}>
+            <TrainerMeetings />
+          </ProtectedRoute>
+        } />
+        <Route path="/trainer/meetings" element={
+          <ProtectedRoute allowedRoles={['trainer']}>
+            <TrainerMeetings />
           </ProtectedRoute>
         } />
         <Route path="/trainer/course-builder/:trainingId" element={
@@ -265,8 +331,10 @@ function App() {
         } />
         </Routes>
         </ConfirmDialogProvider>
-      </ToastProvider>
-    </Router>
+        </ToastProvider>
+      </Router>
+    </LanguageProvider>
+    </ThemeProvider>
   );
 }
 

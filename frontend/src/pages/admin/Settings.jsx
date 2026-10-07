@@ -17,11 +17,13 @@ import {
   Calendar,
   Lock,
   Eye,
-  EyeOff
+  EyeOff,
+  Bot,
+  Loader2
 } from 'lucide-react';
 import AppLayout from '../../components/AppLayout';
 import ProfilePictureUpload from '../../components/ProfilePictureUpload';
-import { authService, departmentService, subjectService } from '../../services/api';
+import { authService, departmentService, subjectService, settingsService } from '../../services/api';
 import { toast } from '../../components/Toast';
 
 const SECTIONS = [
@@ -29,6 +31,7 @@ const SECTIONS = [
   { id: 'security', label: 'Security', icon: ShieldCheck },
   { id: 'language', label: 'Language', icon: Languages },
   { id: 'notifications', label: 'Notifications', icon: Bell },
+  { id: 'ai', label: 'AI Assistants', icon: Bot },
   { id: 'system', label: 'System Configuration', icon: Settings2 }
 ];
 
@@ -115,11 +118,51 @@ const Settings = () => {
   const [editingSubject, setEditingSubject] = useState(null);
   const [saving, setSaving] = useState(false);
 
+  // Admin-controlled feature switches (stored in the database, enforced by
+  // the backend on every guarded request).
+  const [trainerAiEnabled, setTrainerAiEnabled] = useState(true);
+  const [aiLoading, setAiLoading] = useState(true);
+  const [aiSaving, setAiSaving] = useState(false);
+
   const isAdmin = user?.role === 'admin';
+
+  const loadAiSettings = async () => {
+    setAiLoading(true);
+    try {
+      const res = await settingsService.get();
+      setTrainerAiEnabled(res.data?.trainer_ai_enabled !== false);
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to load AI assistant settings');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const saveTrainerAi = async (enabled) => {
+    const previous = trainerAiEnabled;
+    setTrainerAiEnabled(enabled); // optimistic
+    setAiSaving(true);
+    try {
+      const res = await settingsService.update({ trainer_ai_enabled: enabled });
+      // Trust the server's echo of the persisted value.
+      setTrainerAiEnabled(res.data?.trainer_ai_enabled !== false);
+      toast.success(
+        enabled
+          ? 'Trainer AI Assistant enabled for all trainers.'
+          : 'Trainer AI Assistant disabled. The backend now rejects every Trainer AI request.'
+      );
+    } catch (error) {
+      setTrainerAiEnabled(previous);
+      toast.error(error.response?.data?.message || 'Failed to update the Trainer AI Assistant');
+    } finally {
+      setAiSaving(false);
+    }
+  };
 
   useEffect(() => {
     loadProfile();
     loadSystemData();
+    loadAiSettings();
     const savedLanguage = localStorage.getItem('mint_settings_language');
     if (savedLanguage) setLanguage(savedLanguage);
     try {
@@ -559,6 +602,68 @@ const Settings = () => {
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {activeSection === 'ai' && (
+            <div className="max-w-2xl space-y-4">
+              <div className="bg-white rounded-2xl shadow-card overflow-hidden">
+                <div className="p-6 border-b border-mint-border">
+                  <h3 className="text-base font-semibold text-gray-900">AI Assistants</h3>
+                  <p className="text-sm text-mint-gray mt-1">
+                    Turn the AI assistants on or off for the whole system. These switches are stored
+                    in the database and are enforced by the backend on every request, so a
+                    disabled assistant is genuinely unavailable &mdash; not just hidden.
+                  </p>
+                </div>
+
+                {aiLoading ? (
+                  <div className="p-8 flex items-center justify-center gap-2 text-mint-gray text-sm">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Loading settings&hellip;
+                  </div>
+                ) : (
+                  <ul className="divide-y divide-mint-border">
+                    <li className="flex items-center justify-between gap-4 p-6">
+                      <div className="flex items-start gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-mint-primary/10 flex items-center justify-center shrink-0">
+                          <Bot className="w-5 h-5 text-mint-primary" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900">Trainer AI Assistant</p>
+                          <p className="text-sm text-mint-gray mt-0.5">
+                            Lets trainers generate lesson, module and assessment drafts for their
+                            trainings. When disabled, the backend rejects every draft request with a
+                            &ldquo;disabled by the administrator&rdquo; error.
+                          </p>
+                          <p className={`text-xs font-semibold mt-2 inline-block px-2 py-0.5 rounded-full ${
+                            trainerAiEnabled
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-red-100 text-red-700'
+                          }`}>
+                            {trainerAiEnabled ? 'Enabled' : 'Disabled'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {aiSaving && <Loader2 className="w-4 h-4 text-mint-primary animate-spin" />}
+                        <Toggle
+                          checked={trainerAiEnabled}
+                          onChange={() => !aiSaving && saveTrainerAi(!trainerAiEnabled)}
+                        />
+                      </div>
+                    </li>
+                  </ul>
+                )}
+              </div>
+
+              <div className="bg-mint-light border border-mint-border rounded-xl p-4 text-xs text-mint-gray flex items-start gap-2">
+                <ShieldCheck className="w-4 h-4 text-mint-primary shrink-0 mt-0.5" />
+                <span>
+                  The trainee AI Training Assistant is separate from this switch and is always
+                  available, because it only explains published lesson material and is never allowed
+                  to answer assessment questions.
+                </span>
+              </div>
             </div>
           )}
 

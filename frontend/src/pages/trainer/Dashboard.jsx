@@ -43,7 +43,6 @@ const TrainerDashboard = () => {
         
         const total = trainerTrainings.length;
         const active = trainerTrainings.filter(t => t.status === 'open' || t.status === 'in_progress').length;
-        const completed = trainerTrainings.filter(t => t.status === 'completed').length;
         
         let totalParticipants = 0;
         for (const training of trainerTrainings) {
@@ -56,11 +55,19 @@ const TrainerDashboard = () => {
             }
           } catch (err) {}
         }
-        
+
+        // The Completed card and its drill-down list read the exact same
+        // endpoint, so the number here can never disagree with the list.
+        let completedParticipants = 0;
+        try {
+          const completedResponse = await api.get('/training-requests/trainer/completed');
+          completedParticipants = completedResponse.data?.data?.participants?.length || 0;
+        } catch (err) {}
+
         setStats({
           totalTrainings: total,
           activeTrainings: active,
-          completedTrainings: completed,
+          completedTrainings: completedParticipants,
           totalParticipants: totalParticipants,
           recentTrainings: trainerTrainings.slice(0, 4)
         });
@@ -110,8 +117,8 @@ const TrainerDashboard = () => {
       icon: FaCheckCircle,
       bgColor: 'bg-orange-50',
       textColor: 'text-orange-600',
-      description: 'Finished trainings',
-      link: '/trainer/trainings'
+      description: 'Participants finished',
+      link: '/trainer/completed'
     }
   ];
 

@@ -108,7 +108,7 @@ const AddTrainer = () => {
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} autoComplete="off">
           <div className="grid grid-cols-2 gap-4">
             <div className="mb-4">
               <label className="block text-sm font-semibold text-mint-primary mb-1">Full Name *</label>
@@ -117,6 +117,7 @@ const AddTrainer = () => {
                 name="full_name"
                 value={formData.full_name}
                 onChange={handleChange}
+                autoComplete="off"
                 className="w-full px-4 py-2 border border-mint-border rounded-lg focus:outline-none focus:ring-2 focus:ring-mint-primary"
                 required
               />
@@ -128,6 +129,7 @@ const AddTrainer = () => {
                 name="email"
                 value={formData.email}
                 onChange={handleChange}
+                autoComplete="off"
                 className="w-full px-4 py-2 border border-mint-border rounded-lg focus:outline-none focus:ring-2 focus:ring-mint-primary"
                 required
               />
@@ -142,6 +144,7 @@ const AddTrainer = () => {
                 name="password"
                 value={formData.password}
                 onChange={handleChange}
+                autoComplete="new-password"
                 className="w-full px-4 py-2 border border-mint-border rounded-lg focus:outline-none focus:ring-2 focus:ring-mint-primary"
                 required
                 minLength="6"
@@ -154,6 +157,7 @@ const AddTrainer = () => {
                 name="confirmPassword"
                 value={formData.confirmPassword}
                 onChange={handleChange}
+                autoComplete="new-password"
                 className="w-full px-4 py-2 border border-mint-border rounded-lg focus:outline-none focus:ring-2 focus:ring-mint-primary"
                 required
               />
@@ -167,6 +171,7 @@ const AddTrainer = () => {
               name="phone"
               value={formData.phone}
               onChange={handleChange}
+              autoComplete="off"
               className="w-full px-4 py-2 border border-mint-border rounded-lg focus:outline-none focus:ring-2 focus:ring-mint-primary"
             />
           </div>
@@ -178,6 +183,7 @@ const AddTrainer = () => {
                 name="department_id"
                 value={formData.department_id}
                 onChange={handleChange}
+                autoComplete="off"
                 className="w-full px-4 py-2 border border-mint-border rounded-lg focus:outline-none focus:ring-2 focus:ring-mint-primary bg-white"
               >
                 <option value="">Select Department</option>
@@ -193,6 +199,7 @@ const AddTrainer = () => {
                 name="specialization"
                 value={formData.specialization}
                 onChange={handleChange}
+                autoComplete="off"
                 className="w-full px-4 py-2 border border-mint-border rounded-lg focus:outline-none focus:ring-2 focus:ring-mint-primary"
               />
             </div>
@@ -205,6 +212,7 @@ const AddTrainer = () => {
               name="qualification"
               value={formData.qualification}
               onChange={handleChange}
+              autoComplete="off"
               className="w-full px-4 py-2 border border-mint-border rounded-lg focus:outline-none focus:ring-2 focus:ring-mint-primary"
             />
           </div>
@@ -216,6 +224,7 @@ const AddTrainer = () => {
               value={formData.biography}
               onChange={handleChange}
               rows="3"
+              autoComplete="off"
               className="w-full px-4 py-2 border border-mint-border rounded-lg focus:outline-none focus:ring-2 focus:ring-mint-primary"
               placeholder="Professional background and experience..."
             />

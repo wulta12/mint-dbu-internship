@@ -15,9 +15,13 @@ import {
   Award,
   AlertCircle,
   Loader2,
-  ClipboardCheck
+  ClipboardCheck,
+  Bot,
+  WifiOff
 } from 'lucide-react';
 import AppLayout from '../../components/AppLayout';
+import TrainingAssistant from '../../components/TrainingAssistant';
+import VideoPlayer, { parseVideoSource, isMeasurableEmbed } from '../../components/VideoPlayer';
 import { learningService, certificateService, triggerDownload } from '../../services/api';
 
 const TYPE_META = {
@@ -27,6 +31,11 @@ const TYPE_META = {
   document: { icon: File, label: 'Document' },
   link: { icon: ExternalLink, label: 'External Link' }
 };
+
+// Anti-skip tolerance for the player, in seconds. Deliberately generous: this
+// layer only produces an immediate, honest UX reaction, while the server's own
+// playback-rate clamp stays the real enforcement.
+const MAX_ADVANCE_SECONDS = 4;
 
 const Learn = () => {
   const { trainingId, lessonId } = useParams();
@@ -39,11 +48,54 @@ const Learn = () => {
   const [lesson, setLesson] = useState(null);
   const [lessonLoading, setLessonLoading] = useState(false);
   const [completing, setCompleting] = useState(false);
+  const [attesting, setAttesting] = useState(false);
   const [videoProgress, setVideoProgress] = useState(null);
   const [toast, setToast] = useState('');
-  const videoRef = useRef(null);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   const lastSavedRef = useRef(-1);
-  const thresholdReportedRef = useRef(false);
+  // Set only once the SERVER confirms the lesson completed. While it is false,
+  // a position that passes the watch threshold is always worth reporting again,
+  // so a crossing that lands on a busy moment is never lost for the session.
+  const ackedThresholdRef = useRef(false);
+  // The latest position not yet confirmed by the server. A report that arrives
+  // while another save is in flight is drained right after it, instead of being
+  // dropped - a dropped threshold crossing is how a fully watched video stays
+  // permanently stuck below 100%.
+  const pendingPositionRef = useRef(null);
+  // Furthest point actually played, in seconds. Anything beyond it is a skip.
+  const furthestWatchedRef = useRef(0);
+  // The mounted player's seek function, so a blocked skip can be undone for
+  // every provider (native <video>, YouTube, Vimeo) rather than just one.
+  const playerApiRef = useRef(null);
+  const saveInFlightRef = useRef(false);
+  // Always points at the activity being played. The progress callback and the
+  // save loop are memoized, so they must read the CURRENT lesson through this
+  // ref; closing over `currentActivity` directly could save a position against
+  // the previous lesson when two consecutive videos share a threshold.
+  const currentActivityRef = useRef(null);
+
+  // ---------- connectivity ----------
+  // Video lessons stream from the network, so an offline trainee must be told
+  // plainly rather than staring at a player that will never load.
+  useEffect(() => {
+    const goOnline = () => setIsOnline(true);
+    const goOffline = () => setIsOnline(false);
+    window.addEventListener('online', goOnline);
+    window.addEventListener('offline', goOffline);
+    return () => {
+      window.removeEventListener('online', goOnline);
+      window.removeEventListener('offline', goOffline);
+    };
+  }, []);
+
+  // The server owns the real threshold; the client mirrors it only to decide
+  // when to report progress and to show an honest label.
+  const watchThreshold = Math.min(
+    1,
+    Math.max(0.1, (Number(lesson?.video_progress_threshold) || 80) / 100)
+  );
+  const watchThresholdPercent = Math.round(watchThreshold * 100);
 
   // ---------- load course ----------
   useEffect(() => {
@@ -86,7 +138,10 @@ const Learn = () => {
     setLesson(null);
     setVideoProgress(null);
     lastSavedRef.current = -1;
-    thresholdReportedRef.current = false;
+    ackedThresholdRef.current = false;
+    pendingPositionRef.current = null;
+    furthestWatchedRef.current = 0;
+    saveInFlightRef.current = false;
     learningService.getLesson(activity.id)
       .then((res) => {
         if (!active) return;
@@ -99,7 +154,29 @@ const Learn = () => {
   }, [currentIndex, activities]);
 
   const currentActivity = activities[currentIndex];
+  currentActivityRef.current = currentActivity;
   const summary = course?.summary;
+
+  // Whether this lesson must be watched as a video. This covers real `video`
+  // lessons and `link` lessons the server flagged as pointing at a video
+  // source: both must clear the watch threshold (or be attested) to complete.
+  const isVideoActivity = currentActivity?.type === 'video' ||
+    (currentActivity?.type === 'link' && currentActivity?.video_trackable !== undefined);
+
+  // Whether this lesson's video can be measured by the player we render. The
+  // server's own classification is the authority (it decides whether it will
+  // accept a completion at all); the client-side check is only a fallback for
+  // the moment before the lesson payload arrives. An unmeasurable video must
+  // offer the manual confirmation, otherwise the only button on the page is one
+  // the server will always reject.
+  const videoSource = isVideoActivity && lesson
+    ? parseVideoSource(currentActivity?.type === 'link' ? lesson.external_url : lesson.video_url)
+    : null;
+  const isEmbedVideo = !!videoSource;
+  const isMeasurableVideo = lesson && lesson.video_trackable !== undefined
+    ? Boolean(lesson.video_trackable)
+    : (isEmbedVideo ? isMeasurableEmbed(videoSource) : true);
+  const videoAlreadyWatched = Boolean(lesson?.video_attested);
 
   // ---------- locked / unlocked computation ----------
   const computeUnlocked = useCallback(() => {
@@ -137,6 +214,12 @@ const Learn = () => {
       goNext();
       return;
     }
+    // Completing is recorded on the server, so an offline attempt would just
+    // fail. Say so instead of showing a network error.
+    if (!navigator.onLine) {
+      setToast('You are offline. Reconnect to mark this activity complete.');
+      return;
+    }
     setCompleting(true);
     try {
       const res = await learningService.completeLesson(currentActivity.id);
@@ -153,7 +236,6 @@ const Learn = () => {
           summary: data.summary
         };
       });
-      goNext();
     } catch (err) {
       setToast(err.response?.data?.message || 'Failed to mark lesson complete');
     } finally {
@@ -161,39 +243,149 @@ const Learn = () => {
     }
   };
 
-  const handleVideoTimeUpdate = () => {
-    const video = videoRef.current;
-    if (!video || !video.duration) return;
-    const pos = video.currentTime / video.duration;
-    const position = Math.round(pos * 100) / 100;
+  // Pulls the player back to the furthest legitimately watched point. Works for
+  // every provider because each one registers its own seek function.
+  const blockSkip = () => {
+    const api = playerApiRef.current;
+    if (!api || typeof api.seekTo !== 'function') return false;
+    api.seekTo(furthestWatchedRef.current);
+    return true;
+  };
+
+  const handlePlayerApi = useCallback((api) => {
+    playerApiRef.current = api;
+  }, []);
+
+  // The single place playback progress is turned into a saved position. Every
+  // player (native <video>, YouTube, Vimeo) reports seconds here, so the
+  // threshold, the resume position and the skip guard behave identically.
+  const handleVideoProgress = useCallback((currentTime, duration) => {
+    // A player that has not reported a usable duration (Infinity from a
+    // progressive stream, NaN before metadata) cannot be measured at all.
+    if (!Number.isFinite(currentTime) || !Number.isFinite(duration) || duration <= 0) return;
+
+    // A progress tick can land on the far side of a scrub, so guard the advance
+    // here too and never let the watch watermark jump ahead.
+    if (currentTime - furthestWatchedRef.current > MAX_ADVANCE_SECONDS) {
+      if (blockSkip()) {
+        setToast('Skipping ahead is not allowed. Watch the video to continue.');
+        return;
+      }
+    }
+    if (currentTime > furthestWatchedRef.current) {
+      furthestWatchedRef.current = currentTime;
+    }
+
+    const position = Math.round((currentTime / duration) * 100) / 100;
     const bucket = Math.floor(position * 20);
-    const pastThreshold = position >= 0.8;
-    if (pastThreshold && thresholdReportedRef.current) return;
-    if (bucket !== lastSavedRef.current || pastThreshold) {
-      lastSavedRef.current = bucket;
-      if (pastThreshold) thresholdReportedRef.current = true;
-      saveVideoPosition(position);
+    const pastThreshold = position >= watchThreshold;
+    // Once the server confirms completion, reporting stops. Until then a
+    // position past the threshold is ALWAYS worth saving again, so a crossing
+    // that lands on a busy moment (a save already in flight) is retried rather
+    // than dropped - a dropped crossing is how a fully watched video stays
+    // stuck below 100% for the whole session.
+    if (ackedThresholdRef.current) return;
+    if (!pastThreshold && bucket === lastSavedRef.current) return;
+    lastSavedRef.current = bucket;
+    saveVideoPosition(position);
+  }, [watchThreshold]);
+
+  const saveVideoPosition = async (position) => {
+    if (ackedThresholdRef.current) return;
+    // Offline saves are dropped by the server anyway; skip the doomed request
+    // and tell the trainee their position will be lost.
+    if (!navigator.onLine) {
+      setToast('You are offline, so this part of the video was not recorded. Reconnect and replay to save your place.');
+      return;
+    }
+    // Remember the latest unsent position. If another save is already in
+    // flight, it is drained the moment that one finishes instead of being
+    // silently dropped (the previous "one report at a time" guard lost exactly
+    // the report that first crossed the threshold).
+    pendingPositionRef.current = position;
+    if (saveInFlightRef.current) return;
+    saveInFlightRef.current = true;
+    let savingPosition = null;
+    try {
+      // Drain every position that arrives while saving, so no report is left
+      // behind. The last one wins; the server clamps implausible jumps anyway.
+      while (pendingPositionRef.current !== null && !ackedThresholdRef.current) {
+        savingPosition = pendingPositionRef.current;
+        pendingPositionRef.current = null;
+        const lessonId = currentActivityRef.current?.id;
+        if (!lessonId) break;
+        const res = await learningService.saveVideoPosition(lessonId, savingPosition);
+        if (res.data?.completed) {
+          ackedThresholdRef.current = true;
+          setCourse((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              activities: prev.activities.map((a) =>
+                String(a.id) === String(lessonId) ? { ...a, status: 'completed' } : a
+              ),
+              nextIncompleteLessonId: res.data.nextIncompleteLessonId,
+              summary: res.data.summary
+            };
+          });
+          break;
+        }
+        if (res.data?.clamped) {
+          setToast('That jump was too large to record. Continue watching normally to save your place.');
+        }
+      }
+    } catch (err) {
+      // A rejected position means the server refused an implausible jump, so
+      // the stored position is authoritative. Tell the trainee rather than
+      // letting the video and the saved progress silently disagree.
+      if (!navigator.onLine) {
+        setToast('Connection lost. Your last saved position is being kept.');
+      } else if (err.response?.status === 422 || err.response?.status === 400) {
+        setToast('That jump was too large to record. Continue watching normally to save your place.');
+      } else {
+        // Transient failure (network hiccup, server restart): leave the pending
+        // position in place so the next tick retries it instead of losing it.
+        pendingPositionRef.current = pendingPositionRef.current ?? savingPosition;
+      }
+    } finally {
+      saveInFlightRef.current = false;
+      // A position queued while the loop above was finishing its last await
+      // gets sent right away, keeping the threshold crossing reliable even on
+      // the final tick (for example when a video ends).
+      if (pendingPositionRef.current !== null && !ackedThresholdRef.current && navigator.onLine) {
+        saveVideoPosition(pendingPositionRef.current);
+      }
     }
   };
 
-  const saveVideoPosition = async (position) => {
+  // The escape hatch for a video whose provider cannot report playback
+  // progress. The server records who confirmed it and when; it is the only way
+  // such a lesson can ever be completed.
+  const handleAttestVideo = async () => {
+    if (!currentActivity || attesting) return;
+    if (!navigator.onLine) {
+      setToast('You are offline. Reconnect to confirm this video.');
+      return;
+    }
+    setAttesting(true);
     try {
-      const res = await learningService.saveVideoPosition(currentActivity.id, position);
-      if (res.data?.completed) {
-        setCourse((prev) => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            activities: prev.activities.map((a) =>
-              String(a.id) === String(currentActivity.id) ? { ...a, status: 'completed' } : a
-            ),
-            nextIncompleteLessonId: res.data.nextIncompleteLessonId,
-            summary: res.data.summary
-          };
-        });
-      }
+      const res = await learningService.attestVideoWatched(currentActivity.id);
+      setCourse((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          activities: prev.activities.map((a) =>
+            String(a.id) === String(currentActivity.id) ? { ...a, status: 'completed' } : a
+          ),
+          nextIncompleteLessonId: res.data?.nextIncompleteLessonId ?? prev.nextIncompleteLessonId,
+          summary: res.data?.summary ?? prev.summary
+        };
+      });
+      setToast('Video confirmed as watched.');
     } catch (err) {
-      // Ignore transient video save errors
+      setToast(err.response?.data?.message || 'Could not record your confirmation');
+    } finally {
+      setAttesting(false);
     }
   };
 
@@ -207,6 +399,13 @@ const Learn = () => {
     }
   };
 
+  const openActivity = (index) => {
+    if (index < 0 || index >= activities.length) return;
+    const target = activities[index];
+    setCurrentIndex(index);
+    navigate(`/trainee/learn/${trainingId}/${target.id}`, { replace: true });
+  };
+
   const goTo = (index) => {
     if (index < 0 || index >= activities.length) return;
     const target = activities[index];
@@ -214,16 +413,16 @@ const Learn = () => {
       setToast('Complete the previous lessons to unlock this activity.');
       return;
     }
-    setCurrentIndex(index);
-    navigate(`/trainee/learn/${trainingId}/${target.id}`, { replace: true });
+    openActivity(index);
   };
 
-  const goNext = () => {
+  const goNext = (overrideSummary) => {
+    const nextSummary = overrideSummary || summary;
     if (currentIndex + 1 < activities.length) {
-      goTo(currentIndex + 1);
+      openActivity(currentIndex + 1);
     } else {
       // Last activity -> go to assessment
-      if (summary?.assessmentUnlocked) {
+      if (nextSummary?.assessmentUnlocked) {
         navigate(`/trainee/assessment/${trainingId}`);
       } else {
         navigate(`/trainee/trainings/${trainingId}`);
@@ -267,7 +466,7 @@ const Learn = () => {
 
   const TypeIcon = currentActivity ? (TYPE_META[currentActivity.type]?.icon || BookOpen) : BookOpen;
   const isLast = currentIndex === activities.length - 1;
-  const canNext = currentActivity?.status === 'completed';
+  const canNext = currentActivity?.status === 'completed' || currentActivity?.is_required === false;
 
   return (
     <AppLayout>
@@ -346,10 +545,34 @@ const Learn = () => {
               Back to Training Details
             </Link>
 
+            {!isOnline && (
+              <div className="mb-3 bg-yellow-50 border border-yellow-300 text-yellow-900 rounded-xl p-4 text-sm flex items-start gap-3">
+                <WifiOff className="w-5 h-5 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold">You are offline</p>
+                  <p className="mt-0.5">
+                    {isVideoActivity
+                      ? 'Videos need an internet connection, and your place in this video cannot be saved until you reconnect. Reading, PDF and link activities already on screen stay available.'
+                      : 'Your activity and progress will be saved once you reconnect. Anything already loaded stays readable.'}
+                  </p>
+                </div>
+              </div>
+            )}
+
             <div className="bg-white rounded-xl shadow-card border border-mint-border overflow-hidden">
               {/* Header */}
               <div className="bg-gradient-to-r from-mint-primary to-mint-secondary p-5 text-white">
-                <p className="text-xs text-white/70 font-medium">{course.training.training_title}</p>
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-xs text-white/70 font-medium">{course.training.training_title}</p>
+                  <button
+                    onClick={() => setAssistantOpen(true)}
+                    aria-label="Open AI Training Assistant"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/15 border border-white/25 text-xs font-semibold hover:bg-white/25 transition shrink-0"
+                  >
+                    <Bot className="w-4 h-4 text-mint-gold" />
+                    AI Training Assistant
+                  </button>
+                </div>
                 <h1 className="text-xl md:text-2xl font-bold mt-1">{currentActivity?.title}</h1>
                 <div className="flex items-center gap-3 mt-3 flex-wrap">
                   {currentActivity?.module_title && (
@@ -383,8 +606,8 @@ const Learn = () => {
                     lesson={lesson}
                     type={currentActivity?.type}
                     videoProgress={videoProgress}
-                    videoRef={videoRef}
-                    onTimeUpdate={handleVideoTimeUpdate}
+                    onVideoProgress={handleVideoProgress}
+                    onPlayerApi={handlePlayerApi}
                   />
                 )}
               </div>
@@ -400,7 +623,15 @@ const Learn = () => {
                 </button>
 
                 <div className="flex items-center gap-3">
-                  {currentActivity?.type !== 'video' && currentActivity?.status !== 'completed' && (
+                  {/*
+                    A measurable video completes itself once the threshold is
+                    reached, so no button is offered. An unmeasurable one cannot
+                    be completed by the server at all, so the only honest control
+                    is the confirmation below - offering "Mark as Complete" there
+                    is what produced a button that always returned "you must
+                    watch 80%".
+                  */}
+                  {!isVideoActivity && currentActivity?.status !== 'completed' && (
                     <button
                       onClick={handleComplete}
                       disabled={completing}
@@ -410,16 +641,31 @@ const Learn = () => {
                       Mark as Complete
                     </button>
                   )}
+                  {isVideoActivity &&
+                    !isMeasurableVideo &&
+                    currentActivity?.status !== 'completed' &&
+                    !videoAlreadyWatched && (
+                      <button
+                        onClick={handleAttestVideo}
+                        disabled={attesting}
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-mint-accent text-white hover:bg-opacity-90 transition text-sm disabled:opacity-50"
+                      >
+                        {attesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                        I watched this video
+                      </button>
+                    )}
                   <button
                     onClick={goNext}
-                    disabled={!canNext && !isLast}
+                    disabled={!canNext}
                     className={`flex items-center gap-2 px-5 py-2 rounded-lg transition text-sm font-semibold
-                      ${canNext || isLast
+                      ${canNext
                         ? 'bg-mint-primary text-white hover:bg-opacity-90'
                         : 'bg-mint-border text-mint-gray cursor-not-allowed'}`}
                   >
                     {isLast
-                      ? (summary?.assessmentUnlocked ? 'Go to Assessment' : 'Finish Training')
+                      ? (canNext
+                          ? (summary?.assessmentUnlocked ? 'Go to Assessment' : 'Finish Training')
+                          : 'Complete this lesson to continue')
                       : 'Next'}
                     <ArrowRight className="w-4 h-4" />
                   </button>
@@ -431,8 +677,21 @@ const Learn = () => {
             {currentActivity?.status !== 'completed' && (
               <div className="mt-4 bg-mint-light border border-mint-border rounded-xl p-4 text-sm text-mint-gray flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 text-mint-primary shrink-0 mt-0.5" />
-                {currentActivity?.type === 'video' ? (
-                  <span>Watch at least 80% of the video to mark this lesson complete. Your progress is saved automatically.</span>
+                {isVideoActivity ? (
+                  isMeasurableVideo ? (
+                    <span>
+                      Watch at least {watchThresholdPercent}% of the video to mark this lesson
+                      complete. Your progress is saved automatically
+                      {isOnline ? '.' : ' once you reconnect.'}
+                    </span>
+                  ) : (
+                    <span>
+                      This player cannot report how much of the video you watched, so the{' '}
+                      {watchThresholdPercent}% rule cannot be checked automatically. Watch the
+                      video, then click <strong>I watched this video</strong> to continue. Your
+                      confirmation is recorded with your name and the time.
+                    </span>
+                  )
                 ) : (
                   <span>This activity counts toward your training progress. Review the material, then click <strong>Mark as Complete</strong> to continue.</span>
                 )}
@@ -495,13 +754,24 @@ const Learn = () => {
             {toast}
           </div>
         )}
+
+        {/* AI Training Assistant */}
+        {assistantOpen && (
+          <TrainingAssistant
+            onClose={() => setAssistantOpen(false)}
+            trainingId={trainingId}
+            trainingTitle={course.training?.training_title || 'Training'}
+            lessonId={currentActivity?.id}
+            lessonTitle={currentActivity?.title}
+          />
+        )}
       </div>
     </AppLayout>
   );
 };
 
 // ---------- Lesson body by type ----------
-const LessonBody = ({ lesson, type, videoProgress, videoRef, onTimeUpdate }) => {
+const LessonBody = ({ lesson, type, videoProgress, onVideoProgress, onPlayerApi }) => {
   if (!lesson) return null;
   const fileUrl = learningService.getLessonFileUrl(lesson.file_path);
 
@@ -509,31 +779,13 @@ const LessonBody = ({ lesson, type, videoProgress, videoRef, onTimeUpdate }) => 
     case 'video':
       return (
         <div>
-          {lesson.video_url ? (
-            <video
-              ref={videoRef}
-              controls
-              className="w-full rounded-xl bg-black aspect-video"
-              src={lesson.video_url}
-              onTimeUpdate={onTimeUpdate}
-              onLoadedMetadata={(e) => {
-                if (videoProgress > 0) e.currentTarget.currentTime = videoProgress * e.currentTarget.duration;
-              }}
-            ></video>
-          ) : fileUrl ? (
-            <video
-              ref={videoRef}
-              controls
-              className="w-full rounded-xl bg-black aspect-video"
-              src={fileUrl}
-              onTimeUpdate={onTimeUpdate}
-              onLoadedMetadata={(e) => {
-                if (videoProgress > 0) e.currentTarget.currentTime = videoProgress * e.currentTarget.duration;
-              }}
-            ></video>
-          ) : (
-            <p className="text-mint-gray text-center py-8">No video URL configured for this lesson.</p>
-          )}
+          <VideoPlayer
+            videoUrl={lesson.video_url}
+            fileUrl={fileUrl}
+            savedFraction={videoProgress || 0}
+            onProgress={onVideoProgress}
+            onApi={onPlayerApi}
+          />
           {lesson.content && <p className="mt-4 text-gray-700 leading-relaxed whitespace-pre-wrap">{lesson.content}</p>}
         </div>
       );
@@ -578,6 +830,31 @@ const LessonBody = ({ lesson, type, videoProgress, videoRef, onTimeUpdate }) => 
         </div>
       );
     case 'link':
+      /* A link lesson the server classified as a video (e.g. a YouTube /
+         Vimeo link) is rendered as the player so its watch progress can be
+         measured - the 80% rule is enforced exactly like a `video` lesson
+         instead of being bypassed by opening the link in another tab. */
+      if (lesson.video_trackable !== undefined) {
+        return (
+          <div>
+            <VideoPlayer
+              videoUrl={lesson.external_url}
+              savedFraction={videoProgress || 0}
+              onProgress={onVideoProgress}
+              onApi={onPlayerApi}
+            />
+            <a
+              href={lesson.external_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-mint-primary text-white rounded-lg hover:bg-opacity-90 transition text-sm"
+            >
+              <ExternalLink className="w-4 h-4" /> Open Video in New Tab
+            </a>
+            {lesson.content && <p className="mt-4 text-gray-700 leading-relaxed whitespace-pre-wrap">{lesson.content}</p>}
+          </div>
+        );
+      }
       return (
         <div className="py-6">
           <div className="bg-mint-light border border-mint-border rounded-xl p-6 text-center">

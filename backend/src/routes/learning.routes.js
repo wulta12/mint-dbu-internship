@@ -30,6 +30,8 @@ router.get('/trainings/:trainingId', auth, learningController.getCourse);
 router.get('/lessons/:lessonId', auth, learningController.getLesson);
 router.post('/lessons/:lessonId/complete', auth, authorize('trainee'), learningController.completeLesson);
 router.put('/lessons/:lessonId/video-position', auth, authorize('trainee'), learningController.saveVideoPosition);
+// Only for videos whose provider cannot report playback progress.
+router.post('/lessons/:lessonId/video-attestation', auth, authorize('trainee'), learningController.attestVideoWatched);
 
 // ---------------- Trainer / Admin content management ----------------
 router.get('/trainings/:trainingId/tree', auth, authorize('admin', 'trainer'), learningController.getCourseTree);

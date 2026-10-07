@@ -14,7 +14,9 @@ import {
   ClipboardList,
   HelpCircle,
   X,
-  Star
+  Star,
+  ShieldCheck,
+  Clock
 } from 'lucide-react';
 import AppLayout from '../../components/AppLayout';
 import { assessmentService, trainingService } from '../../services/api';
@@ -46,6 +48,12 @@ const AssessmentBuilder = () => {
   const [passScore, setPassScore] = useState(70);
   const [isPublished, setIsPublished] = useState(false);
 
+  // Anti-cheating settings (enforced by the backend on every attempt).
+  // There is no attempt limit: trainees may retake the assessment freely.
+  const [timeLimit, setTimeLimit] = useState(''); // '' = no time limit
+  const [shuffleQuestions, setShuffleQuestions] = useState(true);
+  const [shuffleOptions, setShuffleOptions] = useState(true);
+
   // Question modal
   const [questionModal, setQuestionModal] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState(null);
@@ -66,6 +74,9 @@ const AssessmentBuilder = () => {
       setDescription(a?.description || '');
       setPassScore(a?.pass_score || 70);
       setIsPublished(a?.is_published === true);
+      setTimeLimit(a?.time_limit_minutes || '');
+      setShuffleQuestions(a?.shuffle_questions !== false);
+      setShuffleOptions(a?.shuffle_options !== false);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to load assessment');
     } finally {
@@ -83,6 +94,24 @@ const AssessmentBuilder = () => {
 
   // ---------------- Assessment settings ----------------
 
+  // Validates the anti-cheating values before they are sent. The backend
+  // re-validates them, so this is only to give immediate feedback.
+  const buildAntiCheatPayload = () => {
+    const limit = String(timeLimit).trim();
+    if (limit !== '') {
+      const minutes = Number(limit);
+      if (!Number.isFinite(minutes) || minutes < 1 || minutes > 600) {
+        showError('Time limit must be between 1 and 600 minutes, or left empty for no time limit');
+        return null;
+      }
+    }
+    return {
+      time_limit_minutes: limit === '' ? null : Math.round(Number(limit)),
+      shuffle_questions: shuffleQuestions,
+      shuffle_options: shuffleOptions
+    };
+  };
+
   const saveSettings = async () => {
     if (!title.trim()) {
       showError('Assessment title is required');
@@ -93,6 +122,9 @@ const AssessmentBuilder = () => {
       showError('Pass score must be between 1 and 100');
       return;
     }
+    const antiCheat = buildAntiCheatPayload();
+    if (!antiCheat) return;
+
     setSaving(true);
     clearError();
     try {
@@ -100,7 +132,8 @@ const AssessmentBuilder = () => {
         title: title.trim(),
         description: description.trim(),
         pass_score: score,
-        is_published: isPublished
+        is_published: isPublished,
+        ...antiCheat
       });
       setAssessment(res.data?.assessment || assessment);
       await fetchData();
@@ -112,6 +145,8 @@ const AssessmentBuilder = () => {
   };
 
   const togglePublish = async () => {
+    const antiCheat = buildAntiCheatPayload();
+    if (!antiCheat) return;
     setSaving(true);
     clearError();
     try {
@@ -119,7 +154,8 @@ const AssessmentBuilder = () => {
         title: (title || 'Final Assessment').trim(),
         description: description.trim(),
         pass_score: Number(passScore) || 70,
-        is_published: !isPublished
+        is_published: !isPublished,
+        ...antiCheat
       });
       setIsPublished(!isPublished);
     } catch (err) {
@@ -340,6 +376,94 @@ const AssessmentBuilder = () => {
           </div>
         </div>
 
+        {/* ---------- Anti-cheating settings ---------- */}
+        <div className="bg-white rounded-xl shadow-card border border-mint-border p-6 mb-6">
+          <div className="flex items-center gap-2 mb-1">
+            <ShieldCheck className="w-5 h-5 text-mint-primary" />
+            <h2 className="text-lg font-bold text-gray-900">Anti-Cheating Settings</h2>
+          </div>
+          <p className="text-sm text-mint-gray mb-5">
+            These rules are enforced by the server on every attempt. They cannot be bypassed
+            by the trainee, even by changing the browser clock or reloading the page. There is no
+            attempt limit &mdash; trainees may sit the assessment as many times as they need.
+          </p>
+
+          <div className="grid grid-cols-1 gap-5">
+            {/* Time limit */}
+            <div>
+              <label htmlFor="timeLimit" className="block text-sm font-semibold text-mint-primary mb-1.5">
+                Time Limit (minutes)
+              </label>
+              <input
+                id="timeLimit"
+                type="number"
+                min="1"
+                max="600"
+                value={timeLimit}
+                onChange={(e) => setTimeLimit(e.target.value)}
+                placeholder="Leave empty for no time limit"
+                className="w-full px-4 py-2 border border-mint-border rounded-lg focus:outline-none focus:ring-2 focus:ring-mint-primary"
+              />
+              <p className="text-xs text-mint-gray mt-1.5 flex items-start gap-1.5">
+                <Clock className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                {String(timeLimit).trim() === '' ? (
+                  <>
+                    <span className="text-amber-700 font-medium">
+                      No time limit set &mdash; trainees will see &ldquo;No Time Limit&rdquo; and no
+                      countdown. Enter 1&ndash;600 minutes to show them a timer.
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    A countdown is shown to the trainee and is enforced by the server. When it
+                    reaches zero the attempt is submitted automatically (1&ndash;600 minutes).
+                  </>
+                )}
+              </p>
+            </div>
+          </div>
+
+          {/* Randomisation toggles */}
+          <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-3">
+            <ToggleRow
+              checked={shuffleQuestions}
+              onChange={setShuffleQuestions}
+              label="Randomise question order"
+              hint="Each attempt gets the questions in a different order, so the paper cannot be shared between trainees."
+            />
+            <ToggleRow
+              checked={shuffleOptions}
+              onChange={setShuffleOptions}
+              label="Randomise answer options"
+              hint="The options are shuffled per attempt and the correct answer is re-mapped, so option A is not always the answer."
+            />
+          </div>
+
+          <div className="mt-5 bg-mint-light border border-mint-border rounded-lg px-4 py-3 text-xs text-mint-gray flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 text-mint-primary shrink-0 mt-0.5" />
+            <span>
+              Correct answers are stored on the server and are <strong>never</strong> sent to the
+              trainee. The browser only ever receives the question text and the four options.
+              An attempt that is started but not submitted is <strong>resumed</strong> with its
+              original deadline rather than restarted, so reloading the page grants no extra time.
+            </span>
+          </div>
+
+          {/* These settings have no effect until they are saved, so the button
+              lives in this card next to the fields rather than only in the
+              Assessment Settings card above. */}
+          <div className="flex justify-end mt-4">
+            <button
+              onClick={saveSettings}
+              disabled={saving}
+              className="flex items-center gap-2 px-5 py-2 rounded-lg bg-mint-primary text-white hover:bg-opacity-90 transition text-sm font-semibold disabled:opacity-60"
+            >
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+              Save Anti-Cheating Settings
+            </button>
+          </div>
+        </div>
+
         {/* Questions */}
         <div className="bg-white rounded-xl shadow-card border border-mint-border overflow-hidden">
           <div className="flex items-center gap-2 px-6 py-4 border-b border-mint-border bg-mint-light/60">
@@ -484,5 +608,23 @@ const AssessmentBuilder = () => {
     </AppLayout>
   );
 };
+
+// Labelled on/off switch used by the anti-cheating settings.
+const ToggleRow = ({ checked, onChange, label, hint }) => (
+  <label className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition ${
+    checked ? 'border-mint-primary bg-mint-primary/5' : 'border-mint-border bg-white'
+  }`}>
+    <input
+      type="checkbox"
+      checked={checked}
+      onChange={(e) => onChange(e.target.checked)}
+      className="w-5 h-5 mt-0.5 rounded accent-mint-primary cursor-pointer shrink-0"
+    />
+    <span className="min-w-0">
+      <span className="block text-sm font-semibold text-gray-900">{label}</span>
+      <span className="block text-xs text-mint-gray mt-1">{hint}</span>
+    </span>
+  </label>
+);
 
 export default AssessmentBuilder;

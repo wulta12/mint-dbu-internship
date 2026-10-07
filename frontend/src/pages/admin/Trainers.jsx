@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Edit, Trash2, Eye, UserPlus } from 'lucide-react';
+import { Edit, Trash2, Eye, UserPlus } from 'lucide-react';
 import AppLayout from '../../components/AppLayout';
 import { userService } from '../../services/api';
 import { toast } from '../../components/Toast';

@@ -89,6 +89,10 @@ CREATE TABLE IF NOT EXISTS trainee_progress (
     last_video_position REAL DEFAULT 0,
     completed_at TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- Set only when a trainee personally confirms watching a video whose
+    -- provider cannot report playback progress (never automatically).
+    video_attested_at TIMESTAMP,
+    video_attested_reason VARCHAR(255),
     UNIQUE (training_id, trainee_id, lesson_id)
 );
 

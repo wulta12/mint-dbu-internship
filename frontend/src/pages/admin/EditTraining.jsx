@@ -24,9 +24,9 @@ const EditTraining = () => {
     capacity: 20,
     status: 'draft',
     subject_id: '',
-    department_id: '',
     trainer_id: '',
-    is_all_departments: false
+    is_all_departments: false,
+    department_ids: []
   });
 
   useEffect(() => {
@@ -65,9 +65,9 @@ const EditTraining = () => {
         capacity: training.capacity || 20,
         status: training.status || 'draft',
         subject_id: training.subject_id || '',
-        department_id: training.is_all_departments ? 'all' : (training.department_id || ''),
         trainer_id: training.trainer_id || '',
-        is_all_departments: training.is_all_departments || false
+        is_all_departments: training.is_all_departments || false,
+        department_ids: Array.isArray(training.department_ids) ? training.department_ids.map(Number) : []
       });
     } catch (error) {
       console.error('Failed to fetch training:', error);
@@ -80,24 +80,40 @@ const EditTraining = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    if (name === 'department_id') {
+    if (name === 'is_all_departments') {
       setFormData({
         ...formData,
-        department_id: value,
-        subject_id: '',
-        is_all_departments: value === 'all'
+        is_all_departments: e.target.checked,
+        department_ids: []
       });
       return;
     }
     setFormData({ ...formData, [name]: value });
   };
 
-  const filteredSubjects = formData.department_id && formData.department_id !== 'all'
-    ? subjects.filter((s) => String(s.department_id) === String(formData.department_id))
-    : subjects;
+  const toggleDepartment = (id) => {
+    if (formData.is_all_departments) return;
+    setFormData({
+      ...formData,
+      department_ids: formData.department_ids.includes(id)
+        ? formData.department_ids.filter((d) => d !== id)
+        : [...formData.department_ids, id]
+    });
+  };
+
+  const getEndDateError = () => {
+    if (formData.start_date && formData.end_date && new Date(formData.end_date) < new Date(formData.start_date)) {
+      return 'End date must be after the start date.';
+    }
+    return null;
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (getEndDateError()) {
+      toast.error(getEndDateError());
+      return;
+    }
     setSaving(true);
     try {
       await trainingService.update(id, formData);
@@ -185,41 +201,6 @@ const EditTraining = () => {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-semibold text-mint-primary mb-1">Department</label>
-              <select
-                name="department_id"
-                value={formData.department_id}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border border-mint-border rounded-lg focus:outline-none focus:ring-2 focus:ring-mint-primary"
-              >
-                <option value="">Select Department</option>
-                <option value="all">All Departments</option>
-                {departments.map((dept) => (
-                  <option key={dept.id} value={dept.id}>{dept.name}</option>
-                ))}
-              </select>
-              <p className="text-xs text-mint-gray mt-1">
-                {formData.department_id === 'all'
-                  ? 'Trainees from every department can request this training.'
-                  : 'Only trainees in this department can request it.'}
-              </p>
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-mint-primary mb-1">Subject</label>
-              <select
-                name="subject_id"
-                value={formData.subject_id}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border border-mint-border rounded-lg focus:outline-none focus:ring-2 focus:ring-mint-primary"
-                required
-              >
-                <option value="">Select Subject</option>
-                {filteredSubjects.map((subject) => (
-                  <option key={subject.id} value={subject.id}>{subject.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
               <label className="block text-sm font-semibold text-mint-primary mb-1">Assigned Trainer</label>
               <select
                 name="trainer_id"
@@ -233,6 +214,58 @@ const EditTraining = () => {
                 ))}
               </select>
             </div>
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-semibold text-mint-primary mb-1">Subject</label>
+            <select
+              name="subject_id"
+              value={formData.subject_id}
+              onChange={handleChange}
+              className="w-full px-4 py-2 border border-mint-border rounded-lg focus:outline-none focus:ring-2 focus:ring-mint-primary"
+              required
+            >
+              <option value="">Select Subject</option>
+              {subjects.map((subject) => (
+                <option key={subject.id} value={subject.id}>{subject.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-semibold text-mint-primary mb-1">Assign Departments</label>
+            <label className="flex items-center gap-2 text-sm text-mint-gray cursor-pointer mb-2">
+              <input
+                type="checkbox"
+                name="is_all_departments"
+                checked={formData.is_all_departments}
+                onChange={handleChange}
+                className="accent-mint-primary w-4 h-4"
+              />
+              Open to All Departments
+            </label>
+            {!formData.is_all_departments && (
+              <div className="grid grid-cols-2 max-h-40 overflow-y-auto border border-mint-border rounded-lg p-3 gap-1.5">
+                {departments.map((dept) => (
+                  <label key={dept.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.department_ids.includes(dept.id)}
+                      onChange={() => toggleDepartment(dept.id)}
+                      className="accent-mint-primary w-4 h-4"
+                    />
+                    {dept.name}
+                  </label>
+                ))}
+              </div>
+            )}
+            <p className="text-xs text-mint-gray mt-1">
+              {formData.is_all_departments
+                ? 'Trainees from every department can request this training.'
+                : formData.department_ids.length > 0
+                  ? `Trainees in ${formData.department_ids.length} selected department(s) can request it.`
+                  : 'Leave unchecked to assign to the subject\'s department only.'}
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-4 mb-4">
@@ -294,16 +327,19 @@ const EditTraining = () => {
                 name="end_date"
                 value={formData.end_date}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border border-mint-border rounded-lg focus:outline-none focus:ring-2 focus:ring-mint-primary"
+                className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 ${getEndDateError() ? 'border-red-500 focus:ring-red-500' : 'border-mint-border focus:ring-mint-primary'}`}
                 required
               />
+              {getEndDateError() && (
+                <p className="mt-1 text-xs text-red-600">{getEndDateError()}</p>
+              )}
             </div>
           </div>
 
           <div className="flex items-center gap-4">
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || !!getEndDateError()}
               className="bg-mint-primary text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition disabled:opacity-50"
             >
               {saving ? 'Saving...' : 'Update Training'}

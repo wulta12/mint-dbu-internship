@@ -3,11 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { Calendar, ArrowLeft, Clock } from 'lucide-react';
 import AppLayout from '../../components/AppLayout';
 import { participantService } from '../../services/api';
+import { toast } from '../../components/Toast';
+import { confirm } from '../../components/ConfirmDialog';
 
 const MyTrainings = () => {
   const navigate = useNavigate();
   const [trainings, setTrainings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [cancellingId, setCancellingId] = useState(null);
 
   useEffect(() => {
     fetchMyTrainings();
@@ -22,6 +25,22 @@ const MyTrainings = () => {
       console.error('Error fetching my trainings:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCancel = async (requestId) => {
+    if (!(await confirm('Delete this enrollment request? You can request enrollment again later.', { title: 'Delete Request', confirmText: 'Delete Request' }))) {
+      return;
+    }
+    try {
+      setCancellingId(requestId);
+      await participantService.cancelRequest(requestId);
+      toast.success('Enrollment request deleted');
+      fetchMyTrainings();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to delete request');
+    } finally {
+      setCancellingId(null);
     }
   };
 
@@ -79,11 +98,13 @@ const MyTrainings = () => {
                   training.participation_status === 'rejected' ? 'bg-red-100 text-red-700' :
                   training.participation_status === 'attended' ? 'bg-blue-100 text-blue-700' :
                   training.participation_status === 'completed' ? 'bg-purple-100 text-purple-700' :
+                  training.participation_status === 'cancelled' ? 'bg-gray-100 text-gray-700' :
                   'bg-gray-100 text-gray-700'
                 }`}>
                   {training.participation_status === 'pending' ? 'Pending Approval' :
                    training.participation_status === 'approved' ? 'Enrolled' :
                    training.participation_status === 'rejected' ? 'Rejected' :
+                   training.participation_status === 'cancelled' ? 'Cancelled' :
                    training.participation_status || 'Requested'}
                 </span>
               </div>
@@ -99,6 +120,29 @@ const MyTrainings = () => {
                 </span>
               </div>
 
+              {/* Progress from real lesson completion, so the card here agrees
+                  with the dashboard's "Completed" count. A training whose
+                  content was never built has nothing to show. */}
+              {(training.participation_status === 'approved' || training.participation_status === 'completed') &&
+                training.required_lessons > 0 && (
+                  <div className="mt-3">
+                    <div className="flex items-center justify-between text-xs text-mint-gray mb-1">
+                      <span>
+                        {training.done_lessons} of {training.required_lessons} lessons
+                      </span>
+                      <span>{training.progress_percent}%</span>
+                    </div>
+                    <div className="h-2 bg-mint-light rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          training.progress_percent === 100 ? 'bg-green-500' : 'bg-mint-primary'
+                        }`}
+                        style={{ width: `${training.progress_percent}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
               <div className="mt-3 flex items-center gap-3">
                 <button
                   onClick={() => navigate(`/trainee/trainings/${training.training_id}`)}
@@ -106,6 +150,15 @@ const MyTrainings = () => {
                 >
                   View Details
                 </button>
+                {training.participation_status === 'pending' && (
+                  <button
+                    onClick={() => handleCancel(training.id)}
+                    disabled={cancellingId === training.id}
+                    className="text-sm text-red-500 hover:text-red-700 hover:underline disabled:opacity-50"
+                  >
+                    {cancellingId === training.id ? 'Deleting...' : 'Delete Request'}
+                  </button>
+                )}
                 {(training.participation_status === 'approved' || training.participation_status === 'completed') && (
                   <button
                     onClick={() => navigate(`/trainee/learn/${training.training_id}`)}

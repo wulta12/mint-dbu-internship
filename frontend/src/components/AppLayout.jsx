@@ -15,9 +15,14 @@ import {
   FileText,
   Settings,
   GraduationCap,
-  PlusCircle
+  PlusCircle,
+  MessageSquare
 } from 'lucide-react';
 import Avatar from './Avatar';
+import LanguageSwitcher from './LanguageSwitcher';
+import ThemeToggle from './ThemeToggle';
+import NotificationBell from './NotificationBell';
+import { useLanguage } from '../i18n/LanguageContext';
 
 const roleLabels = {
   admin: 'Administrator Portal',
@@ -28,6 +33,7 @@ const roleLabels = {
 const AppLayout = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useLanguage();
   const [user, setUser] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -68,13 +74,15 @@ const AppLayout = ({ children }) => {
       { icon: CalendarCheck, label: 'Attendance', path: '/admin/attendance' },
       { icon: Award, label: 'Certificates', path: '/admin/certificates' },
       { icon: FileText, label: 'Reports', path: '/admin/reports' },
+      { icon: MessageSquare, label: 'Messages', path: '/admin/messages' },
       { icon: Settings, label: 'Settings', path: '/admin/settings' },
-      { icon: User, label: 'Profile', path: '/admin/profile' }
     ],
     trainer: [
       { icon: LayoutDashboard, label: 'Dashboard', path: '/trainer/dashboard' },
       { icon: BookOpen, label: 'My Trainings', path: '/trainer/trainings' },
       { icon: Award, label: 'Certificates', path: '/trainer/certificates' },
+      // Inbox for messages the administration sends directly.
+      { icon: MessageSquare, label: 'Messages', path: '/messages' },
       { icon: User, label: 'Profile', path: '/trainer/profile' }
     ],
     trainee: [
@@ -82,6 +90,8 @@ const AppLayout = ({ children }) => {
       { icon: BookOpen, label: 'Available Trainings', path: '/trainee/trainings' },
       { icon: CalendarCheck, label: 'My Trainings', path: '/trainee/my-trainings' },
       { icon: Award, label: 'Certificates', path: '/trainee/certificates' },
+      // Inbox for messages the administration sends directly.
+      { icon: MessageSquare, label: 'Messages', path: '/messages' },
       { icon: User, label: 'Profile', path: '/trainee/profile' }
     ]
   };
@@ -94,27 +104,30 @@ const AppLayout = ({ children }) => {
     );
   }
 
-  const items = navItems[user.role] || navItems.trainee;
+  const items = (navItems[user.role] || navItems.trainee).map((item) => ({
+    ...item,
+    label: t(item.label)
+  }));
 
   return (
-    <div className="min-h-screen bg-mint-light">
+    <div className="min-h-screen bg-mint-light dark:bg-slate-950">
       {/* Sidebar */}
       <aside className={`
-        fixed top-0 left-0 h-full w-64 bg-mint-primary text-white z-50
+        fixed top-0 left-0 h-full w-64 bg-mint-primary dark:bg-slate-900 text-white z-50
         transform transition-transform duration-300 ease-in-out
         lg:translate-x-0 flex flex-col
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         {/* Logo */}
-        <div className="px-5 py-6 border-b border-white/10">
+        <div className="px-5 py-6 border-b border-white/10 dark:border-slate-700">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-mint-gold/15 border border-mint-gold/30 flex items-center justify-center shrink-0">
               <GraduationCap className="text-mint-gold w-6 h-6" />
             </div>
             <div className="min-w-0">
-              <p className="text-[15px] font-bold leading-tight text-white">Ministry of Innovation</p>
+              <p className="text-[15px] font-bold leading-tight text-white">{t('Ministry of Innovation')}</p>
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-mint-gold mt-1">
-                MinT Training System
+                {t('MinT Training System')}
               </p>
             </div>
           </div>
@@ -148,17 +161,6 @@ const AppLayout = ({ children }) => {
             );
           })}
         </nav>
-
-        {/* Logout */}
-        <div className="px-3 py-4 border-t border-white/10">
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-white/40 hover:text-white/80 hover:bg-white/5 transition-all w-full"
-          >
-            <LogOut className="w-[18px] h-[18px]" />
-            <span className="text-[15px]">Logout</span>
-          </button>
-        </div>
       </aside>
 
       {/* Overlay for mobile */}
@@ -169,59 +171,81 @@ const AppLayout = ({ children }) => {
       {/* Main Content */}
       <div className="lg:ml-64">
         {/* Top Header */}
-        <header className="bg-white border-b border-mint-border sticky top-0 z-30 shadow-sm">
+        <header className="bg-white dark:bg-slate-900 border-b border-mint-border dark:border-slate-700 sticky top-0 z-30 shadow-sm">
           <div className="flex items-center justify-between px-4 sm:px-6 py-3.5">
             <div className="flex items-center gap-4">
-              <button onClick={() => setSidebarOpen(!sidebarOpen)} className="lg:hidden p-2 hover:bg-mint-light rounded-lg transition">
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="lg:hidden p-2 hover:bg-mint-light dark:hover:bg-slate-800 rounded-lg transition"
+                aria-label={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+                title={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+              >
                 <Menu className="w-5 h-5 text-mint-gray" />
               </button>
-              <h1 className="text-lg font-bold text-mint-primary tracking-tight">
-                {roleLabels[user.role] || `${user.role} Portal`}
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="hidden lg:flex p-2 hover:bg-mint-light dark:hover:bg-slate-800 rounded-lg transition"
+                aria-label={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+                title={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+              >
+                <Menu className="w-5 h-5 text-mint-gray" />
+              </button>
+              <h1 className="text-lg font-bold text-mint-primary dark:text-blue-300 tracking-tight">
+                {t(roleLabels[user.role] || `${user.role} Portal`)}
               </h1>
             </div>
 
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 sm:gap-3">
+              {/* Language switcher */}
+              <LanguageSwitcher dark={false} />
+
+              {/* Notifications */}
+              <NotificationBell />
+
+              {/* Light / dark mode */}
+              <ThemeToggle />
+
               {/* Profile */}
               <div className="relative">
-                <button onClick={() => setShowProfile(!showProfile)} className="flex items-center gap-3 p-2 hover:bg-mint-light rounded-lg transition">
+                <button onClick={() => setShowProfile(!showProfile)} className="flex items-center gap-3 p-2 hover:bg-mint-light dark:hover:bg-slate-800 rounded-lg transition">
                   <Avatar user={user} size="sm" />
                   <div className="hidden md:block text-left">
-                    <p className="text-sm font-semibold text-gray-800 leading-tight">{user.full_name}</p>
-                    <p className="text-xs text-gray-500 capitalize leading-tight">{user.role}</p>
+                    <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 leading-tight">{user.full_name}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 capitalize leading-tight">{user.role}</p>
                   </div>
                   <ChevronDown className="w-4 h-4 text-gray-400" />
                 </button>
                 {showProfile && (
-                  <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-mint-border p-2 z-50">
-                    <div className="px-3 py-2.5 border-b border-gray-100 mb-1 flex items-center gap-3">
+                  <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-mint-border dark:border-slate-700 p-2 z-50">
+                    <div className="px-3 py-2.5 border-b border-gray-100 dark:border-slate-700 mb-1 flex items-center gap-3">
                       <Avatar user={user} size="md" />
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-gray-900 truncate">{user.full_name}</p>
-                        <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{user.full_name}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user.email}</p>
                       </div>
                     </div>
                     {user.role === 'admin' && (
-                      <Link to="/admin/profile" className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-mint-light transition w-full text-left">
+                      <Link to="/admin/profile" className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-mint-light dark:hover:bg-slate-700 transition w-full text-left">
                         <User className="w-4 h-4 text-mint-gray" />
-                        <span className="text-sm">Profile</span>
+                        <span className="text-sm text-gray-800 dark:text-gray-100">{t('Profile')}</span>
                       </Link>
                     )}
                     {user.role === 'trainee' && (
-                      <Link to="/trainee/profile" className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-mint-light transition w-full text-left">
+                      <Link to="/trainee/profile" className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-mint-light dark:hover:bg-slate-700 transition w-full text-left">
                         <User className="w-4 h-4 text-mint-gray" />
-                        <span className="text-sm">Profile</span>
+                        <span className="text-sm text-gray-800 dark:text-gray-100">{t('Profile')}</span>
                       </Link>
                     )}
                     {user.role === 'trainer' && (
-                      <Link to="/trainer/profile" className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-mint-light transition w-full text-left">
+                      <Link to="/trainer/profile" className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-mint-light dark:hover:bg-slate-700 transition w-full text-left">
                         <User className="w-4 h-4 text-mint-gray" />
-                        <span className="text-sm">Profile</span>
+                        <span className="text-sm text-gray-800 dark:text-gray-100">{t('Profile')}</span>
                       </Link>
                     )}
-                    <hr className="my-1 border-mint-border" />
-                    <button onClick={handleLogout} className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-red-50 transition w-full text-left text-red-600">
+                    <hr className="my-1 border-mint-border dark:border-slate-700" />
+                    <button onClick={handleLogout} className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 transition w-full text-left text-red-600 dark:text-red-400">
                       <LogOut className="w-4 h-4" />
-                      <span className="text-sm">Logout</span>
+                      <span className="text-sm">{t('Logout')}</span>
                     </button>
                   </div>
                 )}

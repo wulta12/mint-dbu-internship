@@ -21,4 +21,7 @@ router.post('/training/:trainingId', auth, authorize('admin', 'trainer'), certif
 // Admin / Trainer / Trainee: download or view a certificate
 router.get('/:id/download', auth, authorize('admin', 'trainer', 'trainee'), certificateController.download);
 
+// Admin: revoke a certificate (revoked certificates verify as INVALID)
+router.post('/:id/revoke', auth, authorize('admin'), certificateController.revoke);
+
 module.exports = router;

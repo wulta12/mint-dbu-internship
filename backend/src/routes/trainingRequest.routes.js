@@ -13,6 +13,8 @@ const {
 router.post('/:trainingId/request', auth, authorize('trainee'), trainingRequestController.requestForTraining);
 // My enrollment requests with status
 router.get('/my', auth, authorize('trainee'), trainingRequestController.getMy);
+// Cancel (withdraw) my own pending enrollment request
+router.delete('/:id', auth, authorize('trainee'), trainingRequestController.cancel);
 
 // Admin routes
 // Request queue with filters: ?status= &department_id= &training_id= &search=
@@ -24,6 +26,8 @@ router.put('/:id/reject', auth, authorize('admin'), rejectValidation, validate, 
 // Admin / Trainer
 // Participants of a single training
 router.get('/training/:trainingId', auth, authorize('admin', 'trainer'), trainingRequestController.getByTraining);
+// Trainees who completed one of the authenticated trainer's trainings
+router.get('/trainer/completed', auth, authorize('trainer'), trainingRequestController.getCompletedByTrainer);
 // Mark an approved enrollment as completed
 router.put('/:id/complete', auth, authorize('admin', 'trainer'), trainingRequestController.markCompleted);
 

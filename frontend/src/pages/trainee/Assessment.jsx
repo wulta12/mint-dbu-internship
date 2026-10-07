@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft,
   ArrowRight,
@@ -7,20 +7,42 @@ import {
   Award,
   CheckCircle,
   ClipboardList,
-  Clock,
   XCircle,
   Lock,
   Loader2,
-  HelpCircle
+  HelpCircle,
+  Timer,
+  RotateCcw,
+  ShieldAlert
 } from 'lucide-react';
 import AppLayout from '../../components/AppLayout';
 import { assessmentService, certificateService, triggerDownload } from '../../services/api';
 
 const OPTION_LABELS = ['A', 'B', 'C', 'D'];
+const WARNING_AT_SECONDS = 300; // 5 minutes
+
+// mm:ss (or h:mm:ss when the limit is over an hour).
+const formatTime = (totalSeconds) => {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(s / 3600);
+  const minutes = Math.floor((s % 3600) / 60);
+  const seconds = s % 60;
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+};
+
+// The configured limit, written out for the trainee. A null / zero limit
+// means the trainer set no time limit.
+const timeLimitLabel = (minutes) => {
+  const n = Number(minutes);
+  if (!Number.isFinite(n) || n <= 0) return 'No Time Limit';
+  return `${n} Minute${n === 1 ? '' : 's'}`;
+};
 
 const Assessment = () => {
   const { trainingId } = useParams();
-  const navigate = useNavigate();
 
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -36,6 +58,14 @@ const Assessment = () => {
   const [submitting, setSubmitting] = useState(false);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
 
+  // Countdown. `secondsLeft` is null when the trainer set no time limit.
+  // The deadline is anchored to performance.now(), which cannot be altered by
+  // changing the system clock, so the displayed countdown stays honest.
+  const [secondsLeft, setSecondsLeft] = useState(null);
+  const deadlineRef = useRef(null);
+  const answersRef = useRef({});
+  const autoSubmittedRef = useRef(false);
+
   useEffect(() => {
     assessmentService.getStatus(trainingId)
       .then((res) => setStatus(res.data))
@@ -43,16 +73,34 @@ const Assessment = () => {
       .finally(() => setLoading(false));
   }, [trainingId]);
 
+  // Starting (or resuming) an attempt. The server decides whether this is a
+  // fresh paper or a resumed one, and returns the authoritative time left.
   const startAssessment = async () => {
     setStarting(true);
     setError('');
     try {
       const res = await assessmentService.start(trainingId);
+
+      // The previous attempt had already hit its deadline while the trainee
+      // was away: the backend graded it and returns the result directly.
+      if (res.data.expired) {
+        setResult(res.data);
+        setAttempt(res.data.attempt || null);
+        setPhase('result');
+        return;
+      }
+
+      const remaining = typeof res.data.seconds_remaining === 'number' ? res.data.seconds_remaining : null;
       setAttempt(res.data.attempt);
-      setQuestions(res.data.questions);
+      setQuestions(res.data.questions || []);
       setAnswers({});
+      answersRef.current = {};
+      autoSubmittedRef.current = false;
       setCurrentQ(0);
       setQuestionError('');
+      setSecondsLeft(remaining);
+      // Anchor the countdown to a monotonic clock.
+      deadlineRef.current = remaining === null ? null : { baseSeconds: remaining, perfBase: performance.now() };
       setPhase('exam');
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to start assessment');
@@ -62,26 +110,89 @@ const Assessment = () => {
   };
 
   const handleSelect = (questionId, answer) => {
-    setAnswers((prev) => ({ ...prev, [String(questionId)]: answer }));
+    setAnswers((prev) => {
+      const next = { ...prev, [String(questionId)]: answer };
+      answersRef.current = next;
+      return next;
+    });
     setQuestionError('');
   };
 
-  const submitAttempt = async () => {
+  const submitAttempt = useCallback(async () => {
+    if (submitting) return;
     setSubmitting(true);
     setError('');
     try {
-      const res = await assessmentService.submit(attempt.id, Object.entries(answers).map(([question_id, answer]) => ({ question_id, answer })));
+      const payload = Object.entries(answersRef.current).map(([question_id, answer]) => ({ question_id, answer }));
+      const res = await assessmentService.submit(attempt.id, payload);
       setResult(res.data);
+      deadlineRef.current = null;
       setPhase('result');
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to submit assessment');
+      // A failed auto-submit must not leave the trainee stuck on a dead
+      // countdown, so allow a manual retry.
+      autoSubmittedRef.current = false;
     } finally {
       setSubmitting(false);
       setConfirmSubmit(false);
     }
-  };
+  }, [attempt, submitting]);
+
+  // Tick the countdown while the paper is open.
+  useEffect(() => {
+    if (phase !== 'exam' || !deadlineRef.current) return undefined;
+    const id = setInterval(() => {
+      const { baseSeconds, perfBase } = deadlineRef.current;
+      const elapsed = (performance.now() - perfBase) / 1000;
+      setSecondsLeft(Math.max(0, Math.ceil(baseSeconds - elapsed)));
+    }, 250);
+    return () => clearInterval(id);
+  }, [phase]);
+
+  // Submit automatically the moment the countdown reaches zero. The server
+  // re-checks the real deadline, so this can never be used to gain time.
+  useEffect(() => {
+    if (phase !== 'exam' || secondsLeft !== 0 || autoSubmittedRef.current) return;
+    autoSubmittedRef.current = true;
+    submitAttempt();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [secondsLeft, phase]);
+
+  // Warn before losing an in-progress attempt to an accidental reload.
+  useEffect(() => {
+    if (phase !== 'exam') return undefined;
+    const warn = (e) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [phase]);
+
+  // Copy protection: while a paper is open the questions and options must not
+  // be selectable or copyable. This is a deterrent against casual copying
+  // only - anyone determined can still read the text in devtools or from the
+  // network response, so the real protection is that the answer key is never
+  // sent to the browser (see the backend respondWithPaper).
+  useEffect(() => {
+    if (phase !== 'exam') return undefined;
+    const block = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    };
+    const events = ['copy', 'cut', 'paste', 'contextmenu', 'dragstart', 'selectstart'];
+    events.forEach((name) => document.addEventListener(name, block, true));
+    return () => events.forEach((name) => document.removeEventListener(name, block, true));
+  }, [phase]);
 
   const answeredCount = Object.keys(answers).length;
+
+  // Turns the header red inside the last 5 minutes (or the last 30 seconds
+  // for a very short limit) so the trainee is warned before time runs out.
+  const warningWindow = Math.min(WARNING_AT_SECONDS, Math.max(30, (attempt?.time_limit_minutes || 1) * 60 * 0.1));
+  const timerIsUrgent = secondsLeft !== null && secondsLeft <= warningWindow;
 
   const isAnswered = (q) => !!answers[String(q.id)];
 
@@ -174,14 +285,67 @@ const Assessment = () => {
                       </div>
                     )}
 
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    {/* An attempt is already open: resuming keeps the ORIGINAL
+                        deadline, so the trainee cannot gain time by reloading. */}
+                    {status.openAttempt && (
+                      <div className="mb-6 bg-amber-50 border border-amber-300 rounded-xl p-4 flex items-start gap-3">
+                        <RotateCcw className="w-6 h-6 text-amber-600 shrink-0 mt-0.5" />
+                        <div className="min-w-0">
+                          <p className="font-semibold text-gray-800">You have an attempt in progress</p>
+                          <p className="text-sm text-mint-gray">
+                            Attempt #{status.openAttempt.attempt_number} started{' '}
+                            {status.openAttempt.started_at ? new Date(status.openAttempt.started_at).toLocaleString() : ''}
+                            {status.openAttempt.expires_at
+                              ? ` and must be submitted by ${new Date(status.openAttempt.expires_at).toLocaleTimeString()}.`
+                              : '.'}
+                            {' '}The timer is still running and your answers so far were not saved, so
+                            please continue and submit before the deadline.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
                       <StatCard icon={HelpCircle} label="Questions" value={assessment.total_questions} />
                       <StatCard icon={Award} label="Pass Score" value={`${assessment.pass_score}%`} />
-                      <StatCard icon={Clock} label="Your Progress" value={`${status.progress?.percent || 0}%`} />
-                      <StatCard icon={ClipboardList} label="Attempts" value={status.attempts?.length || 0} />
+                      <StatCard
+                        icon={Timer}
+                        label="Time Limit"
+                        value={timeLimitLabel(assessment.time_limit_minutes)}
+                      />
                     </div>
 
                     <p className="text-gray-700 leading-relaxed">{assessment.description || 'Complete the final assessment to earn your certificate of completion.'}</p>
+
+                    <div className="mt-4 bg-mint-light border border-mint-border rounded-xl p-4 text-sm text-mint-gray">
+                      <p className="font-semibold text-gray-800 mb-2">Before you start, please note:</p>
+                      <ul className="space-y-1.5 list-disc list-inside">
+                        {assessment.time_limit_minutes ? (
+                          <li>
+                            <strong>Time Limit: {timeLimitLabel(assessment.time_limit_minutes)}</strong>. The
+                            countdown starts the moment you press start and <strong>cannot be paused</strong>.
+                            When it reaches zero your answers are submitted automatically.
+                          </li>
+                        ) : (
+                          <li>
+                            <strong>No Time Limit</strong> is set for this assessment, so there is no
+                            countdown. Take as long as you need.
+                          </li>
+                        )}
+                        <li>
+                          You may take this assessment <strong>as many times as you need</strong>. There is no
+                          attempt limit.
+                        </li>
+                        {assessment.shuffle_questions && (
+                          <li>Questions are shown in a different order on every attempt.</li>
+                        )}
+                        {assessment.shuffle_options && (
+                          <li>Answer options are shuffled on every attempt.</li>
+                        )}
+                        <li>Correct answers are never sent to your browser, and the timer runs on the server.</li>
+                        <li>Copying, pasting and right-click are disabled while the assessment is open, so the questions cannot be copied out.</li>
+                      </ul>
+                    </div>
 
                     <div className="mt-6 flex flex-col gap-3">
                       {!status.assessmentUnlocked && (
@@ -212,7 +376,11 @@ const Assessment = () => {
                           className="flex items-center justify-center gap-2 px-6 py-3 bg-mint-accent text-white rounded-xl hover:bg-opacity-90 transition font-semibold disabled:opacity-60"
                         >
                           {starting ? <Loader2 className="w-5 h-5 animate-spin" /> : <ClipboardList className="w-5 h-5" />}
-                          {status.attempts?.length ? 'Start New Attempt' : 'Start Assessment'}
+                          {status.openAttempt
+                            ? 'Resume Assessment'
+                            : status.attempts?.length
+                              ? 'Start New Attempt'
+                              : 'Start Assessment'}
                         </button>
                       )}
                     </div>
@@ -263,23 +431,76 @@ const Assessment = () => {
         {/* ---------- Exam ---------- */}
         {phase === 'exam' && (
           <div className="bg-white rounded-xl shadow-card border border-mint-border overflow-hidden">
-            <div className="bg-gradient-to-r from-mint-primary to-mint-secondary p-5 text-white">
+            <div className={`p-5 text-white ${timerIsUrgent ? 'bg-gradient-to-r from-red-600 to-red-700' : 'bg-gradient-to-r from-mint-primary to-mint-secondary'}`}>
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
                   <h1 className="text-xl font-bold">{assessment?.title || 'Final Assessment'}</h1>
-                  <p className="text-white/80 text-sm mt-1">Attempt #{attempt?.attempt_number}</p>
+                  <p className="text-white/80 text-sm mt-1">
+                    Attempt #{attempt?.attempt_number}
+                    {status?.openAttempt ? ' \u00b7 resumed with the original time limit' : ''}
+                  </p>
                 </div>
-                <span className="px-3 py-1 bg-white/15 rounded-full text-sm">
-                  {answeredCount} / {questions.length} answered
-                </span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Countdown. The server owns the real deadline; this is a
+                      display of it that also drives the auto-submit. */}
+                  {secondsLeft !== null ? (
+                    <span
+                      role="timer"
+                      aria-live={timerIsUrgent ? 'assertive' : 'off'}
+                      aria-label="Time remaining"
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-bold tabular-nums ${
+                        timerIsUrgent ? 'bg-white text-red-700 animate-pulse' : 'bg-white/20 text-white'
+                      }`}
+                    >
+                      <Timer className="w-4 h-4" />
+                      Time Remaining: {formatTime(secondsLeft)}
+                    </span>
+                  ) : (
+                    <span
+                      role="timer"
+                      aria-label="No time limit"
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-bold bg-white/20 text-white"
+                    >
+                      <Timer className="w-4 h-4" />
+                      No Time Limit
+                    </span>
+                  )}
+                  <span className="px-3 py-1 bg-white/15 rounded-full text-sm">
+                    {answeredCount} / {questions.length} answered
+                  </span>
+                </div>
               </div>
               <div className="w-full h-2 bg-white/20 rounded-full mt-4 overflow-hidden">
-                <div className="h-full bg-mint-gold rounded-full transition-all duration-300" style={{ width: `${(answeredCount / questions.length) * 100}%` }}></div>
+                <div className="h-full bg-mint-gold rounded-full transition-all duration-300" style={{ width: `${questions.length ? (answeredCount / questions.length) * 100 : 0}%` }}></div>
               </div>
+              {secondsLeft !== null ? (
+                <p className="text-white/80 text-xs mt-2">
+                  <strong>Time Limit: {timeLimitLabel(attempt?.time_limit_minutes)}</strong>. This
+                  countdown runs on the server from the moment the attempt started, so refreshing
+                  the page or leaving and returning will not reset it. It cannot be paused. At zero
+                  your answers are submitted automatically.
+                </p>
+              ) : (
+                <p className="text-white/80 text-xs mt-2">
+                  <strong>No Time Limit</strong> is set for this assessment, so no countdown is
+                  running. You may take as long as you need.
+                </p>
+              )}
+              <p className="text-white/80 text-xs mt-1 flex items-center gap-1.5">
+                <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+                Copying, pasting and right-click are disabled for this assessment.
+              </p>
             </div>
 
             <div className="p-6">
               {error && <ErrorBox message={error} />}
+
+              {secondsLeft === 0 && submitting && (
+                <div className="mb-4 bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 shrink-0 animate-spin" />
+                  Time is up. Submitting your assessment automatically&hellip;
+                </div>
+              )}
 
               {questions.length === 0 ? (
                 <p className="text-center text-mint-gray py-10">No questions available.</p>
@@ -310,7 +531,7 @@ const Assessment = () => {
                     </div>
                   )}
 
-                  <div key={currentQ} className="bg-mint-light border border-mint-border rounded-xl p-5">
+                  <div key={currentQ} className="bg-mint-light border border-mint-border rounded-xl p-5 select-none" onContextMenu={(e) => e.preventDefault()}>
                     <p className="font-semibold text-gray-800 leading-relaxed mb-4">{questions[currentQ].question_text}</p>
                     <div className="grid gap-2.5">
                       {OPTION_LABELS.map((label) => {
@@ -384,6 +605,19 @@ const Assessment = () => {
             </div>
 
             <div className="p-6">
+              {result.timed_out && (
+                <div className="mb-6 bg-amber-50 border border-amber-300 rounded-xl p-4 flex items-start gap-3">
+                  <Timer className="w-6 h-6 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-gray-800">Time ran out &mdash; submitted automatically</p>
+                    <p className="text-sm text-mint-gray">
+                      The time limit for this attempt reached zero, so the system submitted your
+                      answers for you. Any question you had not answered was marked incorrect.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-3 gap-4 mb-6">
                 <StatCard icon={Award} label="Your Score" value={`${result.attempt.score}%`} accent={result.passed} />
                 <StatCard icon={HelpCircle} label="Correct" value={`${result.attempt.correct_count} / ${result.attempt.total_questions}`} />

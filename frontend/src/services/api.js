@@ -3,6 +3,10 @@ import axios from 'axios';
 // API base URL
 const API_URL = 'http://localhost:5000/api';
 
+// Exported so flows that need a real browser navigation rather than an XHR can
+// build an absolute URL from the same value (e.g. starting Google sign-in).
+export { API_URL };
+
 // Create axios instance
 const api = axios.create({
   baseURL: API_URL,
@@ -109,6 +113,72 @@ export const authService = {
   logout: () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+  },
+
+  // Forgot Password. The backend always answers 200 with the same generic
+  // message, so there is no way to tell from here whether the address exists.
+  requestPasswordReset: async (email, lang) => {
+    try {
+      const response = await api.post('/auth/forgot-password', { email, lang });
+      return response.data;
+    } catch (error) {
+      console.error('Password reset request error:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  // Requests a new code. The previous one is invalidated server-side, so this
+  // doubles as the resend action. Returns the same generic message as the
+  // initial request, so it cannot be used to probe for accounts.
+  resendPasswordOtp: async (email, lang) => {
+    try {
+      const response = await api.post('/auth/forgot-password/resend-otp', { email, lang });
+      return response.data;
+    } catch (error) {
+      console.error('Resend OTP error:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  // Exchanges a 6-digit code for a short-lived reset token, which the existing
+  // Reset Password page then consumes. Throws on a wrong, expired, used or
+  // locked-out code; the server message explains which.
+  verifyPasswordOtp: async (email, otp) => {
+    try {
+      const response = await api.post('/auth/forgot-password/verify-otp', { email, otp });
+      return response.data;
+    } catch (error) {
+      console.error('Verify OTP error:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  // Checks an emailed link before the reset form is shown. Always resolves;
+  // callers read `valid` to decide what to render.
+  verifyResetToken: async (token) => {
+    try {
+      const response = await api.get('/auth/reset-password/verify', {
+        params: { token }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Verify reset token error:', error.response?.data || error.message);
+      return { success: false, valid: false, message: error.response?.data?.message };
+    }
+  },
+
+  resetPassword: async ({ token, password, confirm_password }) => {
+    try {
+      const response = await api.post('/auth/reset-password', {
+        token,
+        password,
+        confirm_password
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Reset password error:', error.response?.data || error.message);
+      throw error;
+    }
   },
 
   getCurrentUser: () => {
@@ -280,11 +350,19 @@ export const participantService = {
     try {
       const response = await api.get('/training-requests/my');
       const requests = response.data?.data?.requests || [];
-      const trainings = requests.map((r) => ({
-        ...r,
-        participation_status: r.status,
-        training_id: r.training_id
-      }));
+      const trainings = requests.map((r) => {
+        // `is_completed` describes the trainee's real lesson progress, which
+        // only speaks for an enrollment that exists. A pending or rejected row
+        // can inherit a certificate or finished progress from an earlier,
+        // separate request for the same training, so overriding its status would
+        // label an unapproved request "Completed" and hide the delete button.
+        const isEnrollment = r.status === 'approved' || r.status === 'completed';
+        return {
+          ...r,
+          participation_status: r.is_completed && isEnrollment ? 'completed' : r.status,
+          training_id: r.training_id
+        };
+      });
       return { success: true, data: { trainings } };
     } catch (error) {
       console.error('Get my trainings error:', error.response?.data || error.message);
@@ -308,18 +386,78 @@ export const participantService = {
     }
   },
 
-  getByTraining: async (trainingId) => {
+  getRequests: async (filters = {}) => {
     try {
-      const response = await api.get(`/training-requests/training/${trainingId}`);
-      const requests = response.data?.data?.participants || [];
-      const participants = requests.map((r) => ({
+      const params = new URLSearchParams();
+      if (filters.status) params.append('status', filters.status);
+      if (filters.department_id) params.append('department_id', filters.department_id);
+      if (filters.training_id) params.append('training_id', filters.training_id);
+      if (filters.search) params.append('search', filters.search);
+      const qs = params.toString();
+      const response = await api.get(`/training-requests${qs ? `?${qs}` : ''}`);
+      const requests = response.data?.data?.requests || [];
+      const normalized = requests.map((r) => ({
         ...r,
         participation_status: r.status,
         registered_at: r.requested_at
       }));
+      return { success: true, data: { requests: normalized } };
+    } catch (error) {
+      console.error('Get requests error:', error.response?.data || error.message);
+      return { success: true, data: { requests: [] } };
+    }
+  },
+
+  cancelRequest: async (requestId) => {
+    try {
+      const response = await api.delete(`/training-requests/${requestId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Delete request error:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  getByTraining: async (trainingId) => {
+    try {
+      const response = await api.get(`/training-requests/training/${trainingId}`);
+      const requests = response.data?.data?.participants || [];
+      const participants = requests.map((r) => {
+        // `is_completed` is the shared, backend-computed completion signal
+        // (stored status, issued certificate, or all required lessons done).
+        // Prefer it over the raw status so View Participants agrees with the
+        // trainer dashboard Completed card.
+        const isEnrollment = r.status === 'approved' || r.status === 'completed';
+        return {
+          ...r,
+          participation_status: r.is_completed && isEnrollment ? 'completed' : r.status,
+          registered_at: r.requested_at
+        };
+      });
       return { success: true, participants };
     } catch (error) {
       console.error('Get participants by training error:', error.response?.data || error.message);
+      return { success: true, participants: [] };
+    }
+  },
+
+  // Trainer: every trainee who has completed one of this trainer's trainings.
+  // Backed by the same completion rule as the dashboard card, so the two never
+  // disagree.
+  getCompletedByTrainer: async () => {
+    try {
+      const response = await api.get('/training-requests/trainer/completed');
+      const participants = response.data?.data?.participants || [];
+      return {
+        success: true,
+        participants: participants.map((p) => ({
+          ...p,
+          participation_status: 'completed',
+          registered_at: p.requested_at
+        }))
+      };
+    } catch (error) {
+      console.error('Get completed trainees error:', error.response?.data || error.message);
       return { success: true, participants: [] };
     }
   },
@@ -331,6 +469,154 @@ export const participantService = {
       return response.data;
     } catch (error) {
       console.error('Update participant status error:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+};
+
+// ============================================
+// CONTACT SERVICES
+// ============================================
+export const contactService = {
+  // Admin inbox: filters = { search, status: 'unread' | 'read' }
+  getMessages: async (filters = {}) => {
+    try {
+      const params = new URLSearchParams();
+      if (filters.search) params.append('search', filters.search);
+      if (filters.status) params.append('status', filters.status);
+      const qs = params.toString();
+      const response = await api.get(`/contact${qs ? `?${qs}` : ''}`);
+      return response.data;
+    } catch (error) {
+      console.error('Get contact messages error:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  getUnreadCount: async () => {
+    try {
+      const response = await api.get('/contact/unread-count');
+      return response.data?.data?.unread_count || 0;
+    } catch (error) {
+      console.error('Get unread count error:', error.response?.data || error.message);
+      return 0;
+    }
+  },
+
+  markRead: async (id) => {
+    try {
+      const response = await api.put(`/contact/${id}/read`);
+      return response.data;
+    } catch (error) {
+      console.error('Mark message read error:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  markAllRead: async () => {
+    try {
+      const response = await api.put('/contact/read-all');
+      return response.data;
+    } catch (error) {
+      console.error('Mark all read error:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  deleteMessage: async (id) => {
+    try {
+      const response = await api.delete(`/contact/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error('Delete message error:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  // Replies to a contact-form message. The reply is emailed to the address the
+  // visitor supplied, so `data.email_sent` says whether it actually went out -
+  // a stored reply that never reached them still needs to be resent by hand.
+  replyMessage: async (id, replyMessage) => {
+    try {
+      const response = await api.post(`/contact/${id}/reply`, { replyMessage });
+      return response.data;
+    } catch (error) {
+      console.error('Reply to message error:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+};
+
+// ============================================
+// INTERNAL MESSAGE SERVICES
+//
+// Direct messages between an admin and a signed-in user. Each recipient gets
+// their own row so they can read and reply independently.
+// ============================================
+export const messageService = {
+  // Admin: recipient picker. Excludes admins, who administer rather than receive.
+  getRecipients: async () => {
+    try {
+      const response = await api.get('/internal-messages/recipients');
+      return response.data;
+    } catch (error) {
+      console.error('Get recipients error:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  // Admin: send to one or more recipients.
+  send: async ({ recipientIds, subject, message }) => {
+    try {
+      const response = await api.post('/internal-messages', { recipientIds, subject, message });
+      return response.data;
+    } catch (error) {
+      console.error('Send message error:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  // `role` is optional: a trainee's inbox has nothing to narrow, but an admin
+  // passes it to review what they have been sent back per sender role.
+  getInbox: async (role) => {
+    try {
+      const response = await api.get('/internal-messages/inbox', {
+        params: role ? { role } : undefined
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Get inbox error:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  // Admin: everything this admin sent.
+  getSent: async () => {
+    try {
+      const response = await api.get('/internal-messages/sent');
+      return response.data;
+    } catch (error) {
+      console.error('Get sent messages error:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  markRead: async (id) => {
+    try {
+      const response = await api.put(`/internal-messages/${id}/read`);
+      return response.data;
+    } catch (error) {
+      console.error('Mark message read error:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  reply: async (id, replyMessage) => {
+    try {
+      const response = await api.post(`/internal-messages/${id}/reply`, { replyMessage });
+      return response.data;
+    } catch (error) {
+      console.error('Reply message error:', error.response?.data || error.message);
       throw error;
     }
   },
@@ -368,6 +654,111 @@ export const attendanceService = {
     } catch (error) {
       console.error('Get attendance summary error:', error.response?.data || error.message);
       return { success: true, data: { summary: {} } };
+    }
+  },
+};
+
+// ============================================
+// LIVE MEETING SERVICES (Zoom)
+//
+// Every call is authorised server-side. The read paths used by a
+// trainee resolve to 403 unless that trainee holds an APPROVED
+// enrollment for the training, so no amount of frontend tampering
+// reveals a link. Attendance here is MEETING attendance and is
+// completely separate from the course `attendance` service above.
+// ============================================
+export const meetingService = {
+  // Trainee view: upcoming meetings for an approved enrollment.
+  // `all=true` includes meetings that have already finished.
+  getForTraining: async (trainingId, all = false) => {
+    try {
+      const response = await api.get(`/meeting/training/${trainingId}${all ? '?all=true' : ''}`);
+      return response.data;
+    } catch (error) {
+      console.error('Get meetings error:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  // Admin / owning-trainer view: every meeting including past ones.
+  getForManagement: async (trainingId) => {
+    try {
+      const response = await api.get(`/meeting/training/${trainingId}/manage`);
+      return response.data;
+    } catch (error) {
+      console.error('Get meetings (manage) error:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  getById: async (meetingId) => {
+    try {
+      const response = await api.get(`/meeting/${meetingId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Get meeting error:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  create: async (trainingId, meetingData) => {
+    try {
+      const response = await api.post(`/meeting/training/${trainingId}`, meetingData);
+      return response.data;
+    } catch (error) {
+      console.error('Create meeting error:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  update: async (meetingId, meetingData) => {
+    try {
+      const response = await api.put(`/meeting/${meetingId}`, meetingData);
+      return response.data;
+    } catch (error) {
+      console.error('Update meeting error:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  remove: async (meetingId) => {
+    try {
+      const response = await api.delete(`/meeting/${meetingId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Delete meeting error:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  // Roster of approved participants plus current attendance marks.
+  getAttendance: async (meetingId) => {
+    try {
+      const response = await api.get(`/meeting/${meetingId}/attendance`);
+      return response.data;
+    } catch (error) {
+      console.error('Get meeting attendance error:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  saveAttendance: async (meetingId, records) => {
+    try {
+      const response = await api.put(`/meeting/${meetingId}/attendance`, { records });
+      return response.data;
+    } catch (error) {
+      console.error('Save meeting attendance error:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  getMyAttendance: async () => {
+    try {
+      const response = await api.get(`/meeting/my/attendance`);
+      return response.data;
+    } catch (error) {
+      console.error('Get my meeting attendance error:', error.response?.data || error.message);
+      return { success: true, data: { records: [] } };
     }
   },
 };
@@ -502,6 +893,18 @@ export const learningService = {
     }
   },
 
+  // Confirms a video whose provider cannot report playback progress. The server
+  // records who/when and refuses this for any video it CAN measure.
+  attestVideoWatched: async (lessonId) => {
+    try {
+      const response = await api.post(`/learning/lessons/${lessonId}/video-attestation`);
+      return response.data;
+    } catch (error) {
+      console.error('Attest video error:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
   // Trainer / admin content management
   getCourseTree: async (trainingId) => {
     try {
@@ -573,6 +976,62 @@ export const learningService = {
     if (!filePath) return null;
     if (filePath.startsWith('http')) return filePath;
     return `${LESSONS_BASE_URL}/uploads/lessons/${filePath}`;
+  },
+};
+
+// ============================================
+// AI TRAINING ASSISTANT SERVICES
+// ============================================
+export const assistantService = {
+  // Trainee: ask the AI Training Assistant about a training / current lesson.
+  // The backend keeps authentication/enrollment and never reveals assessment answers.
+  chat: async (trainingId, lessonId, message) => {
+    try {
+      const response = await api.post('/assistant/chat', { trainingId, lessonId, message });
+      return response.data;
+    } catch (error) {
+      console.error('AI Assistant chat error:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+};
+
+// ============================================
+// SYSTEM SETTINGS SERVICES
+//
+// Feature switches owned by the admin. The backend is the authority: it
+// re-checks every flag on each guarded request, so hiding a control in the UI
+// is only a convenience, never the enforcement.
+// ============================================
+export const settingsService = {
+  get: async () => {
+    const response = await api.get('/settings');
+    return response.data;
+  },
+
+  update: async (settings) => {
+    const response = await api.put('/settings', { settings });
+    return response.data;
+  },
+};
+
+// ============================================
+// TRAINER AI ASSISTANT SERVICES
+// ============================================
+export const trainerAssistantService = {
+  status: async () => {
+    const response = await api.get('/assistant/trainer/status');
+    return response.data;
+  },
+
+  generate: async (trainingId, topic, contentType = 'lesson', questionCount) => {
+    const response = await api.post('/assistant/trainer/generate', {
+      trainingId,
+      topic,
+      contentType,
+      questionCount
+    });
+    return response.data;
   },
 };
 
@@ -808,18 +1267,64 @@ export const departmentService = {
 };
 
 // ============================================
-// DASHBOARD SERVICES
+// NOTIFICATION SERVICES
 // ============================================
-export const dashboardService = {
-  getStats: async () => {
+export const notificationService = {
+  // Bell feed for the signed-in user: { notifications, unread_count }
+  getAll: async (limit) => {
     try {
-      const response = await api.get('/dashboard/stats');
+      const response = await api.get(
+        `/notifications${limit ? `?limit=${encodeURIComponent(limit)}` : ''}`
+      );
       return response.data;
     } catch (error) {
-      console.error('Get stats error:', error.response?.data || error.message);
-      return { success: true, data: { trainers: 0, trainees: 0, trainings: 0, certificates: 0 } };
+      console.error('Get notifications error:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  // Badge count. Falls back to 0 rather than throwing so the bell never
+  // surfaces an error state just because a poll failed.
+  getUnreadCount: async () => {
+    try {
+      const response = await api.get('/notifications/unread-count');
+      return response.data?.data?.unread_count || 0;
+    } catch (error) {
+      console.error('Get unread count error:', error.response?.data || error.message);
+      return 0;
+    }
+  },
+
+  markRead: async (id) => {
+    try {
+      const response = await api.put(`/notifications/${id}/read`);
+      return response.data;
+    } catch (error) {
+      console.error('Mark notification read error:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  markAllRead: async () => {
+    try {
+      const response = await api.put('/notifications/read-all');
+      return response.data;
+    } catch (error) {
+      console.error('Mark all notifications read error:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  clearAll: async () => {
+    try {
+      const response = await api.delete('/notifications');
+      return response.data;
+    } catch (error) {
+      console.error('Clear notifications error:', error.response?.data || error.message);
+      throw error;
     }
   },
 };
 
 export default api;
+
