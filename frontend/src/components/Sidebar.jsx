@@ -11,7 +11,9 @@ import {
   LogOut,
   ChevronDown,
   ChevronRight,
-  GraduationCap
+  GraduationCap,
+  Menu,
+  X
 } from 'lucide-react';
 import mintLogo from '../images/mint-logo.png';
 
@@ -88,6 +90,9 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
     }
   ];
 
+  // Filter out Profile from admin sidebar only
+  const items = navItems.filter(item => !(item.label === 'Profile'));
+
   return (
     <>
       {isOpen && (
@@ -105,16 +110,26 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
       `}>
         {/* Logo Section - Top Left */}
         <div className="p-5 border-b border-white/10">
-          <div className="flex items-center gap-3">
-            <img 
-              src={mintLogo} 
-              alt="MinT Logo" 
-              className="h-12 w-auto object-contain"
-            />
-            <div>
-              <p className="text-sm font-bold leading-tight">Ministry of Innovation</p>
-              <p className="text-xs text-mint-gold">Training Management System</p>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <img 
+                src={mintLogo} 
+                alt="MinT Logo" 
+                className="h-12 w-auto object-contain"
+              />
+              <div>
+                <p className="text-sm font-bold leading-tight">Ministry of Innovation</p>
+                <p className="text-xs text-mint-gold">Training Management System</p>
+              </div>
             </div>
+            <button
+              onClick={() => setIsOpen(!isOpen)}
+              className="p-1.5 hover:bg-white/10 rounded-lg transition lg:hidden"
+              aria-label={isOpen ? 'Close sidebar' : 'Open sidebar'}
+              title={isOpen ? 'Close sidebar' : 'Open sidebar'}
+            >
+              <Menu className="w-5 h-5 text-white" />
+            </button>
           </div>
           <div className="mt-2">
             <p className="text-xs text-white/50">Administrator Portal</p>
@@ -123,7 +138,7 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto p-4 space-y-1">
-          {navItems.map((item) => {
+          {items.map((item) => {
             const Icon = item.icon;
             const active = isActive(item.path);
 

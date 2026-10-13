@@ -1,11 +1,26 @@
 import axios from 'axios';
 
 // API base URL
-const API_URL = 'http://localhost:5000/api';
+//
+// The backend is reached on port 5000 of whatever host the page was loaded
+// from: localhost in development, the machine's LAN address when the app is
+// opened from another device on the same network, the real domain in
+// production. Deriving it from window.location keeps a single build usable
+// everywhere - hardcoding http://localhost:5000 makes every other device call
+// *its own* localhost and fail with a bare network error.
+// REACT_APP_API_URL still wins when the API lives somewhere else.
+const API_ORIGIN = (
+  process.env.REACT_APP_API_URL || `http://${window.location.hostname || 'localhost'}:5000`
+)
+  .replace(/\/api\/?$/, '')
+  .replace(/\/+$/, '');
+
+const API_URL = `${API_ORIGIN}/api`;
 
 // Exported so flows that need a real browser navigation rather than an XHR can
-// build an absolute URL from the same value (e.g. starting Google sign-in).
-export { API_URL };
+// build an absolute URL from the same value (e.g. starting Google sign-in),
+// and so pages/components that show backend-hosted files can build their URLs.
+export { API_ORIGIN, API_URL };
 
 // Create axios instance
 const api = axios.create({
@@ -283,7 +298,7 @@ export const trainingService = {
 // ============================================
 // TRAINING MATERIAL SERVICES
 // ============================================
-const MATERIALS_BASE_URL = 'http://localhost:5000';
+const MATERIALS_BASE_URL = API_ORIGIN;
 
 export const materialService = {
   getByTraining: async (trainingId) => {
@@ -849,7 +864,7 @@ export const triggerDownload = (blob, filename) => {
 // ============================================
 // LEARNING MANAGEMENT SERVICES
 // ============================================
-const LESSONS_BASE_URL = 'http://localhost:5000';
+const LESSONS_BASE_URL = API_ORIGIN;
 
 export const learningService = {
   // Trainee: full course + progress for the learning page

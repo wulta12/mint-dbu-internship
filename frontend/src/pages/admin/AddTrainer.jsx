@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import AppLayout from '../../components/AppLayout';
-import { departmentService } from '../../services/api';
+import { departmentService, API_URL } from '../../services/api';
 import { toast } from '../../components/Toast';
 
 const AddTrainer = () => {
@@ -59,7 +59,7 @@ const AddTrainer = () => {
       const token = localStorage.getItem('token');
       
       // Register as trainer using the admin API
-      const response = await fetch('http://localhost:5000/api/auth/register', {
+      const response = await fetch(`${API_URL}/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -39,8 +39,46 @@ fs.mkdirSync(path.join(uploadsDir, 'materials'), { recursive: true });
 fs.mkdirSync(path.join(uploadsDir, 'lessons'), { recursive: true });
 
 // Middleware
+//
+// The frontend is rejected by the browser (the client sees a bare "Network
+// Error", never the server's answer) when its origin is missing here. Three
+// kinds of origin have to pass in development:
+//   - localhost, on whatever port create-react-app lands on (it silently moves
+//     to 3001, 3002, ... whenever an earlier run still holds 3000),
+//   - this machine's LAN address, when the app is opened from another device
+//     on the same network (http://192.168.x.x:3000),
+//   - anything listed in ALLOWED_ORIGINS, which is the only door kept open in
+//     production, where a real domain must be spelled out.
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+// RFC1918 ranges plus loopback: hosts only reachable inside the local network.
+const isPrivateHost = (host) =>
+  host === 'localhost' ||
+  host === '127.0.0.1' ||
+  host === '[::1]' ||
+  /^10\./.test(host) ||
+  /^192\.168\./.test(host) ||
+  /^172\.(1[6-9]|2\d|3[01])\./.test(host);
+
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:5173'],
+  origin: (origin, callback) => {
+    // No Origin header means a same-origin, curl or server-to-server call,
+    // which CORS does not govern.
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    if (process.env.NODE_ENV === 'production') return callback(null, false);
+
+    try {
+      const { protocol, hostname } = new URL(origin);
+      const isWebOrigin = protocol === 'http:' || protocol === 'https:';
+      return callback(null, isWebOrigin && isPrivateHost(hostname));
+    } catch {
+      return callback(null, false);
+    }
+  },
   credentials: true
 }));
 app.use(express.json());

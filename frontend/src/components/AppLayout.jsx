@@ -115,8 +115,8 @@ const AppLayout = ({ children }) => {
       <aside className={`
         fixed top-0 left-0 h-full w-64 bg-mint-primary dark:bg-slate-900 text-white z-50
         transform transition-transform duration-300 ease-in-out
-        lg:translate-x-0 flex flex-col
-        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+        flex flex-col
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
         {/* Logo */}
         <div className="px-5 py-6 border-b border-white/10 dark:border-slate-700">
@@ -165,11 +165,11 @@ const AppLayout = ({ children }) => {
 
       {/* Overlay for mobile */}
       {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
+        <div className="fixed inset-0 bg-black/50 z-40 " onClick={() => setSidebarOpen(false)} />
       )}
 
       {/* Main Content */}
-      <div className="lg:ml-64">
+      <div className={`${sidebarOpen ? '' : 'lg:ml-64'}`}>
         {/* Top Header */}
         <header className="bg-white dark:bg-slate-900 border-b border-mint-border dark:border-slate-700 sticky top-0 z-30 shadow-sm">
           <div className="flex items-center justify-between px-4 sm:px-6 py-3.5">
@@ -177,14 +177,6 @@ const AppLayout = ({ children }) => {
               <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}
                 className="lg:hidden p-2 hover:bg-mint-light dark:hover:bg-slate-800 rounded-lg transition"
-                aria-label={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
-                title={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
-              >
-                <Menu className="w-5 h-5 text-mint-gray" />
-              </button>
-              <button
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="hidden lg:flex p-2 hover:bg-mint-light dark:hover:bg-slate-800 rounded-lg transition"
                 aria-label={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
                 title={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
               >

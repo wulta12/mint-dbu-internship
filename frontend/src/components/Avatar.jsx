@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { User } from 'lucide-react';
+import { API_ORIGIN } from '../services/api';
 
 const Avatar = ({ user, size = 'md', className = '' }) => {
   const sizes = {
@@ -16,7 +17,7 @@ const Avatar = ({ user, size = 'md', className = '' }) => {
   const profileImage = user?.profile_image && !imgError
     ? (/^(https?:|data:|blob:)/i.test(user.profile_image)
         ? user.profile_image
-        : `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/uploads/profiles/${user.profile_image}`)
+        : `${API_ORIGIN}/uploads/profiles/${user.profile_image}`)
     : null;
 
   if (profileImage) {
