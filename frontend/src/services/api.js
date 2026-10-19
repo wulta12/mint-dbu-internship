@@ -75,7 +75,13 @@ export const authService = {
       }
       return payload;
     } catch (error) {
-      console.error('Login error:', error.response?.data || error.message);
+      if (error.response) {
+        // Server responded with an error status (e.g., 401, 403, 500)
+        console.error('Login error:', error.response.data || error.message);
+      } else {
+        // Network error - could not connect to server
+        console.error('Login network error: Could not connect to the backend server. Is the server running on port 5000?');
+      }
       throw error;
     }
   },

@@ -1,0 +1,29 @@
+service: mint-training-frontend
+  # This service builds and serves the React frontend
+  # Render will automatically detect it's a Node.js project
+  # and run npm install + npm run build
+
+  # Root directory contains the frontend package.json
+  rootDirectory: mint-training-system-v2/frontend
+
+  # Build command - Render auto-detects this for Node.js
+  buildCommand: npm run build
+
+  # The build produces static files in the build folder
+  # Render serves these automatically
+
+  # For the start command, we'll use a serve command
+  # or leave it to Render's default
+  startCommand: npx serve -s build -l 5000
+
+  # Environment variables - add these in Render dashboard
+  envVars:
+    # The backend API URL - will be set after backend is deployed
+    - key: REACT_APP_API_URL
+      fromService:
+        - name: mint-training-backend
+          property: apiUrl
+    - key: NODE_ENV
+      value: production
+
+  # Add plan and other settings as needed

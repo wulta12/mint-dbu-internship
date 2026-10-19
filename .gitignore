@@ -40,4 +40,5 @@ backend/uploads/
 
 # Database files
 *.sqlite
-*.db
+*.dbbackend/.env.production
+/backend/.env.production

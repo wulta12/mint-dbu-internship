@@ -1,0 +1,41 @@
+service: mint-training-backend
+  # This service runs the Node.js/Express backend
+  rootDirectory: mint-training-system-v2/backend
+
+  buildCommand: npm install
+
+  startCommand: npm run dev
+
+  # Environment variables crucial for the app
+  envVars:
+    # PostgreSQL connection from Neon
+    - key: PORT
+      value: "5000"
+
+    - key: NODE_ENV
+      value: production
+
+    - key: ALLOWED_ORIGINS
+      value: http://localhost:3000,https://mint-frontend.vercel.app
+
+    # Database connection - replace with your Neon credentials
+    - key: DB_HOST
+      fromSecret: DB_HOST
+    - key: DB_PORT
+      value: "5432"
+    - key: DB_DATABASE
+      fromSecret: DB_DATABASE
+    - key: DB_USER
+      fromSecret: DB_USER
+    - key: DB_PASSWORD
+      fromSecret: DB_PASSWORD
+
+    # JWT Configuration
+    - key: JWT_SECRET
+      fromSecret: JWT_SECRET
+    - key: JWT_EXPIRES_IN
+      value: "1d"
+
+    # CORS
+    - key: CORS_ORIGIN
+      fromSecret: CORS_ORIGIN
