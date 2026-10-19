@@ -1,6 +1,6 @@
 service: mint-training-backend
   # This service runs the Node.js/Express backend
-  rootDirectory: mint-training-system-v2/backend
+  rootDirectory: backend
 
   buildCommand: npm install
 

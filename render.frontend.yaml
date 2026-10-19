@@ -4,7 +4,7 @@ service: mint-training-frontend
   # and run npm install + npm run build
 
   # Root directory contains the frontend package.json
-  rootDirectory: mint-training-system-v2/frontend
+  rootDirectory: frontend
 
   # Build command - Render auto-detects this for Node.js
   buildCommand: npm run build

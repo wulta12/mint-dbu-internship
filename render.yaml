@@ -2,7 +2,7 @@ services:
   # Service 1: Backend API
   - type: node
     name: mint-training-backend
-    rootDirectory: mint-training-system-v2/backend
+    rootDirectory: backend
     buildCommand: npm install
     startCommand: npm run dev
     env: node
@@ -33,7 +33,7 @@ services:
   # Service 2: Frontend React app
   - type: node
     name: mint-training-frontend
-    rootDirectory: mint-training-system-v2/frontend
+    rootDirectory: frontend
     buildCommand: npm run build
     startCommand: npx serve -s build -l 5000
     env: node
