@@ -4,7 +4,7 @@ service: mint-training-backend
 
   buildCommand: npm install
 
-  startCommand: npm run dev
+  startCommand: npm start
 
   # Environment variables crucial for the app
   envVars:

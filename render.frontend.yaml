@@ -12,8 +12,7 @@ service: mint-training-frontend
   # The build produces static files in the build folder
   # Render serves these automatically
 
-  # For the start command, we'll use a serve command
-  # or leave it to Render's default
+  # Production start command - serves the pre-built files
   startCommand: npx serve -s build -l 5000
 
   # Environment variables - add these in Render dashboard
