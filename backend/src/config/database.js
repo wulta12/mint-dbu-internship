@@ -8,7 +8,7 @@ let poolConfig;
 if (process.env.DATABASE_URL) {
   poolConfig = {
     connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false }, // Neon requires sslmode=require
+    ssl: { rejectUnauthorized: false, session: {} }, // Neon requires sslmode=require
   };
 } else {
   poolConfig = {
@@ -18,9 +18,9 @@ if (process.env.DATABASE_URL) {
     database: process.env.DB_NAME || 'mint_training_system',
     port: process.env.DB_PORT || 5432,
     max: 20,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 2000,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+    idleTimeoutMillis: 60000,
+    connectionTimeoutMillis: 10000,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false, session: {} } : false,
   };
 }
 
