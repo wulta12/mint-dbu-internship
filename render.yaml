@@ -27,6 +27,8 @@ services:
         fromSecret: JWT_SECRET
       - key: CORS_ORIGIN
         fromSecret: CORS_ORIGIN
+      - key: API_URL
+        fromValue: https://mint-training-backend.onrender.com
     # Renders as a web service with a public URL
     # Example: https://mint-training-backend.onrender.com
 
