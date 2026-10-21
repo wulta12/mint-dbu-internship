@@ -4,7 +4,7 @@ services:
     name: mint-training-backend
     rootDirectory: backend
     buildCommand: npm install
-    startCommand: npm run dev
+    startCommand: npm start
     env: node
     envVars:
       - key: PORT
