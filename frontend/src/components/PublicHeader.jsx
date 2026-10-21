@@ -46,12 +46,12 @@ const PublicHeader = () => {
                 className="h-10 w-auto object-contain"
               />
             </div>
-            <div>
+            <div className="ml-2">
               <div className="text-white font-bold text-sm leading-tight tracking-wide">
-                {t('Ministry of Innovation')}
+                Ministry of Innovation and Technology
               </div>
-              <div className="text-mint-gold font-semibold text-xs tracking-wider">
-                {t('Training Management System')}
+              <div className="text-mint-border text-xs">
+                Online Training Management System
               </div>
             </div>
           </Link>
