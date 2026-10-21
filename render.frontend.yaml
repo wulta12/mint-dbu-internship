@@ -15,13 +15,11 @@ service: mint-training-frontend
   # Production start command - serves the pre-built files
   startCommand: npx serve -s build -l 5000
 
-  # Environment variables - add these in Render dashboard
+# Environment variables - add these in Render dashboard
   envVars:
-    # The backend API URL - will be set after backend is deployed
+    # Backend API URL - must match deployed backend URL
     - key: REACT_APP_API_URL
-      fromService:
-        - name: mint-training-backend
-          property: apiUrl
+      value: https://mint-training-backend.onrender.com/api
     - key: NODE_ENV
       value: production
 
