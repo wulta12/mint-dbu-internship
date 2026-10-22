@@ -31,6 +31,7 @@ const Register = () => {
         setDepartments(res.data?.departments || []);
       } catch (err) {
         console.error('Failed to load departments:', err);
+        setDepartments([]);
       }
     };
     loadDepartments();

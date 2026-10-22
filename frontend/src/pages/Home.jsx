@@ -35,7 +35,7 @@ const Home = () => {
     const fetchStats = async () => {
       try {
         const response = await api.get('/dashboard/stats');
-        if (response.data.success) {
+        if (response.data?.success && response.data?.data) {
           setStats(response.data.data);
         }
       } catch (error) {

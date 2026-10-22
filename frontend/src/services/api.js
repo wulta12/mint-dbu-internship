@@ -61,6 +61,15 @@ api.interceptors.response.use(
   }
 );
 
+// Helper to get error message distinguishing network vs server errors
+const getErrorMessage = (error) => {
+  if (error.response) {
+    return error.response.data?.message || error.response.data || error.message;
+  }
+  // Network error - could not connect to server
+  return 'Could not connect to the backend server. Is the server running?';
+};
+
 // ============================================
 // AUTH SERVICES
 // ============================================
@@ -73,15 +82,9 @@ export const authService = {
         localStorage.setItem('token', payload.token);
         localStorage.setItem('user', JSON.stringify(payload.user));
       }
-      return payload;
+return payload;
     } catch (error) {
-      if (error.response) {
-        // Server responded with an error status (e.g., 401, 403, 500)
-        console.error('Login error:', error.response.data || error.message);
-      } else {
-        // Network error - could not connect to server
-        console.error('Login network error: Could not connect to the backend server. Is the server running on port 5000?');
-      }
+      console.error('Login error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -92,8 +95,8 @@ export const authService = {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       return response.data;
-    } catch (error) {
-      console.error('Register error:', error.response?.data || error.message);
+} catch (error) {
+      console.error('Login error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -103,7 +106,7 @@ export const authService = {
       const response = await api.get('/auth/profile');
       return response.data;
     } catch (error) {
-      console.error('Get profile error:', error.response?.data || error.message);
+      console.error('Get profile error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -116,7 +119,7 @@ export const authService = {
       });
       return response.data;
     } catch (error) {
-      console.error('Update profile error:', error.response?.data || error.message);
+      console.error('Update profile error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -126,7 +129,7 @@ export const authService = {
       const response = await api.put('/auth/password', { current_password, new_password });
       return response.data;
     } catch (error) {
-      console.error('Change password error:', error.response?.data || error.message);
+      console.error('Change password error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -143,7 +146,7 @@ export const authService = {
       const response = await api.post('/auth/forgot-password', { email, lang });
       return response.data;
     } catch (error) {
-      console.error('Password reset request error:', error.response?.data || error.message);
+      console.error('Password reset request error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -156,7 +159,7 @@ export const authService = {
       const response = await api.post('/auth/forgot-password/resend-otp', { email, lang });
       return response.data;
     } catch (error) {
-      console.error('Resend OTP error:', error.response?.data || error.message);
+      console.error('Resend OTP error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -169,7 +172,7 @@ export const authService = {
       const response = await api.post('/auth/forgot-password/verify-otp', { email, otp });
       return response.data;
     } catch (error) {
-      console.error('Verify OTP error:', error.response?.data || error.message);
+      console.error('Verify OTP error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -183,7 +186,7 @@ export const authService = {
       });
       return response.data;
     } catch (error) {
-      console.error('Verify reset token error:', error.response?.data || error.message);
+      console.error('Verify reset token error:', getErrorMessage(error));
       return { success: false, valid: false, message: error.response?.data?.message };
     }
   },
@@ -196,8 +199,8 @@ export const authService = {
         confirm_password
       });
       return response.data;
-    } catch (error) {
-      console.error('Reset password error:', error.response?.data || error.message);
+} catch (error) {
+      console.error('Toggle department error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -225,7 +228,7 @@ export const trainingService = {
       const response = await api.get('/trainings');
       return response.data;
     } catch (error) {
-      console.error('Get all trainings error:', error.response?.data || error.message);
+      console.error('Get all trainings error:', getErrorMessage(error));
       return { success: true, trainings: [] };
     }
   },
@@ -235,7 +238,7 @@ export const trainingService = {
       const response = await api.get('/trainings/available');
       return response.data;
     } catch (error) {
-      console.error('Get available trainings error:', error.response?.data || error.message);
+      console.error('Get available trainings error:', getErrorMessage(error));
       return { success: true, trainings: [] };
     }
   },
@@ -245,7 +248,7 @@ export const trainingService = {
       const response = await api.get('/trainings/department/mine');
       return response.data;
     } catch (error) {
-      console.error('Get department trainings error:', error.response?.data || error.message);
+      console.error('Get department trainings error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -255,7 +258,7 @@ export const trainingService = {
       const response = await api.get('/trainings/my-trainings');
       return response.data;
     } catch (error) {
-      console.error('Get my trainings error:', error.response?.data || error.message);
+      console.error('Get my trainings error:', getErrorMessage(error));
       return { success: true, data: { trainings: [] } };
     }
   },
@@ -265,7 +268,7 @@ export const trainingService = {
       const response = await api.get(`/trainings/${id}`);
       return response.data;
     } catch (error) {
-      console.error('Get training by ID error:', error.response?.data || error.message);
+      console.error('Get training by ID error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -275,7 +278,7 @@ export const trainingService = {
       const response = await api.post('/trainings', trainingData);
       return response.data;
     } catch (error) {
-      console.error('Create training error:', error.response?.data || error.message);
+      console.error('Create training error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -285,7 +288,7 @@ export const trainingService = {
       const response = await api.put(`/trainings/${id}`, trainingData);
       return response.data;
     } catch (error) {
-      console.error('Update training error:', error.response?.data || error.message);
+      console.error('Update training error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -295,7 +298,7 @@ export const trainingService = {
       const response = await api.delete(`/trainings/${id}`);
       return response.data;
     } catch (error) {
-      console.error('Delete training error:', error.response?.data || error.message);
+      console.error('Delete training error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -312,7 +315,7 @@ export const materialService = {
       const response = await api.get(`/trainings/${trainingId}/materials`);
       return response.data;
     } catch (error) {
-      console.error('Get materials error:', error.response?.data || error.message);
+      console.error('Get materials error:', getErrorMessage(error));
       return { success: true, data: { materials: [] } };
     }
   },
@@ -331,7 +334,7 @@ export const materialService = {
       });
       return response.data;
     } catch (error) {
-      console.error('Upload material error:', error.response?.data || error.message);
+      console.error('Upload material error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -341,7 +344,7 @@ export const materialService = {
       const response = await api.delete(`/materials/${materialId}`);
       return response.data;
     } catch (error) {
-      console.error('Delete material error:', error.response?.data || error.message);
+      console.error('Delete material error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -362,7 +365,7 @@ export const participantService = {
       const response = await api.post(`/training-requests/${trainingId}/request`);
       return response.data;
     } catch (error) {
-      console.error('Request enrollment error:', error.response?.data || error.message);
+      console.error('Request enrollment error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -386,7 +389,7 @@ export const participantService = {
       });
       return { success: true, data: { trainings } };
     } catch (error) {
-      console.error('Get my trainings error:', error.response?.data || error.message);
+      console.error('Get my trainings error:', getErrorMessage(error));
       return { success: true, data: { trainings: [] } };
     }
   },
@@ -402,7 +405,7 @@ export const participantService = {
       }));
       return { success: true, data: { requests: normalized } };
     } catch (error) {
-      console.error('Get pending requests error:', error.response?.data || error.message);
+      console.error('Get pending requests error:', getErrorMessage(error));
       return { success: true, data: { requests: [] } };
     }
   },
@@ -424,7 +427,7 @@ export const participantService = {
       }));
       return { success: true, data: { requests: normalized } };
     } catch (error) {
-      console.error('Get requests error:', error.response?.data || error.message);
+      console.error('Get requests error:', getErrorMessage(error));
       return { success: true, data: { requests: [] } };
     }
   },
@@ -434,7 +437,7 @@ export const participantService = {
       const response = await api.delete(`/training-requests/${requestId}`);
       return response.data;
     } catch (error) {
-      console.error('Delete request error:', error.response?.data || error.message);
+      console.error('Delete request error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -457,7 +460,7 @@ export const participantService = {
       });
       return { success: true, participants };
     } catch (error) {
-      console.error('Get participants by training error:', error.response?.data || error.message);
+      console.error('Get participants by training error:', getErrorMessage(error));
       return { success: true, participants: [] };
     }
   },
@@ -478,7 +481,7 @@ export const participantService = {
         }))
       };
     } catch (error) {
-      console.error('Get completed trainees error:', error.response?.data || error.message);
+      console.error('Get completed trainees error:', getErrorMessage(error));
       return { success: true, participants: [] };
     }
   },
@@ -489,7 +492,7 @@ export const participantService = {
       const response = await api.put(`/training-requests/${participantId}/${action}`, { status });
       return response.data;
     } catch (error) {
-      console.error('Update participant status error:', error.response?.data || error.message);
+      console.error('Update participant status error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -509,7 +512,7 @@ export const contactService = {
       const response = await api.get(`/contact${qs ? `?${qs}` : ''}`);
       return response.data;
     } catch (error) {
-      console.error('Get contact messages error:', error.response?.data || error.message);
+      console.error('Get contact messages error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -519,7 +522,7 @@ export const contactService = {
       const response = await api.get('/contact/unread-count');
       return response.data?.data?.unread_count || 0;
     } catch (error) {
-      console.error('Get unread count error:', error.response?.data || error.message);
+      console.error('Get unread count error:', getErrorMessage(error));
       return 0;
     }
   },
@@ -529,7 +532,7 @@ export const contactService = {
       const response = await api.put(`/contact/${id}/read`);
       return response.data;
     } catch (error) {
-      console.error('Mark message read error:', error.response?.data || error.message);
+      console.error('Mark message read error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -539,7 +542,7 @@ export const contactService = {
       const response = await api.put('/contact/read-all');
       return response.data;
     } catch (error) {
-      console.error('Mark all read error:', error.response?.data || error.message);
+      console.error('Mark all read error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -549,7 +552,7 @@ export const contactService = {
       const response = await api.delete(`/contact/${id}`);
       return response.data;
     } catch (error) {
-      console.error('Delete message error:', error.response?.data || error.message);
+      console.error('Delete message error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -562,7 +565,7 @@ export const contactService = {
       const response = await api.post(`/contact/${id}/reply`, { replyMessage });
       return response.data;
     } catch (error) {
-      console.error('Reply to message error:', error.response?.data || error.message);
+      console.error('Reply to message error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -581,7 +584,7 @@ export const messageService = {
       const response = await api.get('/internal-messages/recipients');
       return response.data;
     } catch (error) {
-      console.error('Get recipients error:', error.response?.data || error.message);
+      console.error('Get recipients error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -592,7 +595,7 @@ export const messageService = {
       const response = await api.post('/internal-messages', { recipientIds, subject, message });
       return response.data;
     } catch (error) {
-      console.error('Send message error:', error.response?.data || error.message);
+      console.error('Send message error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -606,7 +609,7 @@ export const messageService = {
       });
       return response.data;
     } catch (error) {
-      console.error('Get inbox error:', error.response?.data || error.message);
+      console.error('Get inbox error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -617,7 +620,7 @@ export const messageService = {
       const response = await api.get('/internal-messages/sent');
       return response.data;
     } catch (error) {
-      console.error('Get sent messages error:', error.response?.data || error.message);
+      console.error('Get sent messages error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -627,7 +630,7 @@ export const messageService = {
       const response = await api.put(`/internal-messages/${id}/read`);
       return response.data;
     } catch (error) {
-      console.error('Mark message read error:', error.response?.data || error.message);
+      console.error('Mark message read error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -637,7 +640,7 @@ export const messageService = {
       const response = await api.post(`/internal-messages/${id}/reply`, { replyMessage });
       return response.data;
     } catch (error) {
-      console.error('Reply message error:', error.response?.data || error.message);
+      console.error('Reply message error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -653,7 +656,7 @@ export const attendanceService = {
       const response = await api.get(url);
       return response.data;
     } catch (error) {
-      console.error('Get attendance error:', error.response?.data || error.message);
+      console.error('Get attendance error:', getErrorMessage(error));
       return { success: true, data: { records: [], dates: [], summary: {} } };
     }
   },
@@ -663,7 +666,7 @@ export const attendanceService = {
       const response = await api.post(`/attendance/training/${trainingId}`, { attendance_date: attendanceDate, records });
       return response.data;
     } catch (error) {
-      console.error('Save attendance error:', error.response?.data || error.message);
+      console.error('Save attendance error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -673,7 +676,7 @@ export const attendanceService = {
       const response = await api.get(`/attendance/training/${trainingId}/summary`);
       return response.data;
     } catch (error) {
-      console.error('Get attendance summary error:', error.response?.data || error.message);
+      console.error('Get attendance summary error:', getErrorMessage(error));
       return { success: true, data: { summary: {} } };
     }
   },
@@ -696,7 +699,7 @@ export const meetingService = {
       const response = await api.get(`/meeting/training/${trainingId}${all ? '?all=true' : ''}`);
       return response.data;
     } catch (error) {
-      console.error('Get meetings error:', error.response?.data || error.message);
+      console.error('Get meetings error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -707,7 +710,7 @@ export const meetingService = {
       const response = await api.get(`/meeting/training/${trainingId}/manage`);
       return response.data;
     } catch (error) {
-      console.error('Get meetings (manage) error:', error.response?.data || error.message);
+      console.error('Get meetings (manage) error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -717,7 +720,7 @@ export const meetingService = {
       const response = await api.get(`/meeting/${meetingId}`);
       return response.data;
     } catch (error) {
-      console.error('Get meeting error:', error.response?.data || error.message);
+      console.error('Get meeting error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -727,7 +730,7 @@ export const meetingService = {
       const response = await api.post(`/meeting/training/${trainingId}`, meetingData);
       return response.data;
     } catch (error) {
-      console.error('Create meeting error:', error.response?.data || error.message);
+      console.error('Create meeting error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -737,7 +740,7 @@ export const meetingService = {
       const response = await api.put(`/meeting/${meetingId}`, meetingData);
       return response.data;
     } catch (error) {
-      console.error('Update meeting error:', error.response?.data || error.message);
+      console.error('Update meeting error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -747,7 +750,7 @@ export const meetingService = {
       const response = await api.delete(`/meeting/${meetingId}`);
       return response.data;
     } catch (error) {
-      console.error('Delete meeting error:', error.response?.data || error.message);
+      console.error('Delete meeting error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -758,7 +761,7 @@ export const meetingService = {
       const response = await api.get(`/meeting/${meetingId}/attendance`);
       return response.data;
     } catch (error) {
-      console.error('Get meeting attendance error:', error.response?.data || error.message);
+      console.error('Get meeting attendance error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -768,7 +771,7 @@ export const meetingService = {
       const response = await api.put(`/meeting/${meetingId}/attendance`, { records });
       return response.data;
     } catch (error) {
-      console.error('Save meeting attendance error:', error.response?.data || error.message);
+      console.error('Save meeting attendance error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -778,7 +781,7 @@ export const meetingService = {
       const response = await api.get(`/meeting/my/attendance`);
       return response.data;
     } catch (error) {
-      console.error('Get my meeting attendance error:', error.response?.data || error.message);
+      console.error('Get my meeting attendance error:', getErrorMessage(error));
       return { success: true, data: { records: [] } };
     }
   },
@@ -793,7 +796,7 @@ export const certificateService = {
       const response = await api.get('/certificates/my');
       return response.data;
     } catch (error) {
-      console.error('Get my certificates error:', error.response?.data || error.message);
+      console.error('Get my certificates error:', getErrorMessage(error));
       return { success: true, data: { certificates: [] } };
     }
   },
@@ -813,7 +816,7 @@ export const certificateService = {
       const response = await api.get('/certificates');
       return response.data;
     } catch (error) {
-      console.error('Get certificates error:', error.response?.data || error.message);
+      console.error('Get certificates error:', getErrorMessage(error));
       return { success: true, data: { certificates: [] } };
     }
   },
@@ -823,7 +826,7 @@ export const certificateService = {
       const response = await api.get(`/certificates/training/${trainingId}`);
       return response.data;
     } catch (error) {
-      console.error('Get training certificates error:', error.response?.data || error.message);
+      console.error('Get training certificates error:', getErrorMessage(error));
       return { success: true, data: { certificates: [] } };
     }
   },
@@ -833,7 +836,7 @@ export const certificateService = {
       const response = await api.post(`/certificates/training/${trainingId}`, { trainee_id: traineeId });
       return response.data;
     } catch (error) {
-      console.error('Issue certificate error:', error.response?.data || error.message);
+      console.error('Issue certificate error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -849,7 +852,7 @@ export const certificateService = {
       const response = await api.get(`/certificates/${certificateId}/download`, { responseType: 'blob' });
       return response.data;
     } catch (error) {
-      console.error('Download certificate error:', error.response?.data || error.message);
+      console.error('Download certificate error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -879,7 +882,7 @@ export const learningService = {
       const response = await api.get(`/learning/trainings/${trainingId}`);
       return response.data;
     } catch (error) {
-      console.error('Get learning course error:', error.response?.data || error.message);
+      console.error('Get learning course error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -889,7 +892,7 @@ export const learningService = {
       const response = await api.get(`/learning/lessons/${lessonId}`);
       return response.data;
     } catch (error) {
-      console.error('Get lesson error:', error.response?.data || error.message);
+      console.error('Get lesson error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -899,7 +902,7 @@ export const learningService = {
       const response = await api.post(`/learning/lessons/${lessonId}/complete`);
       return response.data;
     } catch (error) {
-      console.error('Complete lesson error:', error.response?.data || error.message);
+      console.error('Complete lesson error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -909,7 +912,7 @@ export const learningService = {
       const response = await api.put(`/learning/lessons/${lessonId}/video-position`, { position });
       return response.data;
     } catch (error) {
-      console.error('Save video position error:', error.response?.data || error.message);
+      console.error('Save video position error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -921,7 +924,7 @@ export const learningService = {
       const response = await api.post(`/learning/lessons/${lessonId}/video-attestation`);
       return response.data;
     } catch (error) {
-      console.error('Attest video error:', error.response?.data || error.message);
+      console.error('Attest video error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -932,7 +935,7 @@ export const learningService = {
       const response = await api.get(`/learning/trainings/${trainingId}/tree`);
       return response.data;
     } catch (error) {
-      console.error('Get course tree error:', error.response?.data || error.message);
+      console.error('Get course tree error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -1011,7 +1014,7 @@ export const assistantService = {
       const response = await api.post('/assistant/chat', { trainingId, lessonId, message });
       return response.data;
     } catch (error) {
-      console.error('AI Assistant chat error:', error.response?.data || error.message);
+      console.error('AI Assistant chat error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -1065,7 +1068,7 @@ export const assessmentService = {
       const response = await api.get(`/assessment/trainings/${trainingId}/status`);
       return response.data;
     } catch (error) {
-      console.error('Get assessment status error:', error.response?.data || error.message);
+      console.error('Get assessment status error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -1126,7 +1129,7 @@ export const reportService = {
       const response = await api.get('/reports/overview');
       return response.data.data;
     } catch (error) {
-      console.error('Get reports error:', error.response?.data || error.message);
+      console.error('Get reports error:', getErrorMessage(error));
       return { summary: {}, attendance: {}, byDepartment: [], byTraining: [], byType: [], pendingByDepartment: [] };
     }
   },
@@ -1141,7 +1144,7 @@ export const userService = {
       const response = await api.get('/users');
       return response.data;
     } catch (error) {
-      console.error('Get all users error:', error.response?.data || error.message);
+      console.error('Get all users error:', getErrorMessage(error));
       return { success: true, users: [] };
     }
   },
@@ -1151,7 +1154,7 @@ export const userService = {
       const response = await api.get(`/users/${userId}`);
       return response.data;
     } catch (error) {
-      console.error('Get user by ID error:', error.response?.data || error.message);
+      console.error('Get user by ID error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -1161,7 +1164,7 @@ export const userService = {
       const response = await api.put(`/users/${userId}`, userData);
       return response.data;
     } catch (error) {
-      console.error('Update user error:', error.response?.data || error.message);
+      console.error('Update user error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -1170,8 +1173,8 @@ export const userService = {
     try {
       const response = await api.put(`/users/${userId}/status`, { is_active: isActive });
       return response.data;
-    } catch (error) {
-      console.error('Update user status error:', error.response?.data || error.message);
+} catch (error) {
+      console.error('Update settings error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -1180,8 +1183,8 @@ export const userService = {
     try {
       const response = await api.put(`/users/${userId}/department`, { department_id: departmentId });
       return response.data;
-    } catch (error) {
-      console.error('Update user department error:', error.response?.data || error.message);
+} catch (error) {
+      console.error('Update user status error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -1191,7 +1194,7 @@ export const userService = {
       const response = await api.delete(`/users/${userId}`);
       return response.data;
     } catch (error) {
-      console.error('Delete user error:', error.response?.data || error.message);
+      console.error('Delete user error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -1206,7 +1209,7 @@ export const subjectService = {
       const response = await api.get('/subjects/all');
       return response.data;
     } catch (error) {
-      console.error('Get subjects error:', error.response?.data || error.message);
+      console.error('Get subjects error:', getErrorMessage(error));
       return { success: true, data: { subjects: [] } };
     }
   },
@@ -1216,7 +1219,7 @@ export const subjectService = {
       const response = await api.post('/subjects', data);
       return response.data;
     } catch (error) {
-      console.error('Create subject error:', error.response?.data || error.message);
+      console.error('Create subject error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -1226,7 +1229,7 @@ export const subjectService = {
       const response = await api.put(`/subjects/${id}`, data);
       return response.data;
     } catch (error) {
-      console.error('Update subject error:', error.response?.data || error.message);
+      console.error('Update subject error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -1236,7 +1239,7 @@ export const subjectService = {
       const response = await api.put(`/subjects/${id}/toggle`, { is_active: isActive });
       return response.data;
     } catch (error) {
-      console.error('Toggle subject error:', error.response?.data || error.message);
+      console.error('Toggle subject error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -1251,7 +1254,7 @@ export const departmentService = {
       const response = await api.get('/departments/all');
       return response.data;
     } catch (error) {
-      console.error('Get departments error:', error.response?.data || error.message);
+      console.error('Get departments error:', getErrorMessage(error));
       return { success: true, data: { departments: [] } };
     }
   },
@@ -1261,7 +1264,7 @@ export const departmentService = {
       const response = await api.post('/departments', data);
       return response.data;
     } catch (error) {
-      console.error('Create department error:', error.response?.data || error.message);
+      console.error('Create department error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -1270,8 +1273,8 @@ export const departmentService = {
     try {
       const response = await api.put(`/departments/${id}`, data);
       return response.data;
-    } catch (error) {
-      console.error('Update department error:', error.response?.data || error.message);
+} catch (error) {
+      console.error('Update user department error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -1280,8 +1283,8 @@ export const departmentService = {
     try {
       const response = await api.put(`/departments/${id}/toggle`, { is_active: isActive });
       return response.data;
-    } catch (error) {
-      console.error('Toggle department error:', error.response?.data || error.message);
+} catch (error) {
+      console.error('Update department error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -1299,7 +1302,7 @@ export const notificationService = {
       );
       return response.data;
     } catch (error) {
-      console.error('Get notifications error:', error.response?.data || error.message);
+      console.error('Get notifications error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -1311,7 +1314,7 @@ export const notificationService = {
       const response = await api.get('/notifications/unread-count');
       return response.data?.data?.unread_count || 0;
     } catch (error) {
-      console.error('Get unread count error:', error.response?.data || error.message);
+      console.error('Get unread count error:', getErrorMessage(error));
       return 0;
     }
   },
@@ -1321,7 +1324,7 @@ export const notificationService = {
       const response = await api.put(`/notifications/${id}/read`);
       return response.data;
     } catch (error) {
-      console.error('Mark notification read error:', error.response?.data || error.message);
+      console.error('Mark notification read error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -1331,7 +1334,7 @@ export const notificationService = {
       const response = await api.put('/notifications/read-all');
       return response.data;
     } catch (error) {
-      console.error('Mark all notifications read error:', error.response?.data || error.message);
+      console.error('Mark all notifications read error:', getErrorMessage(error));
       throw error;
     }
   },
@@ -1341,7 +1344,7 @@ export const notificationService = {
       const response = await api.delete('/notifications');
       return response.data;
     } catch (error) {
-      console.error('Clear notifications error:', error.response?.data || error.message);
+      console.error('Clear notifications error:', getErrorMessage(error));
       throw error;
     }
   },

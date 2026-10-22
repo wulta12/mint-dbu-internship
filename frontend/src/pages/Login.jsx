@@ -166,7 +166,11 @@ const Login = () => {
     try {
       const response = await authService.login(email, password);
 
-      completeSignIn(response?.token, response?.user);
+      if (response?.token && response?.user) {
+        completeSignIn(response.token, response.user);
+      } else {
+        setError(t('Login failed. Please try again.'));
+      }
     } catch (err) {
       console.error('Login error:', err);
 
