@@ -40,18 +40,15 @@ fs.mkdirSync(path.join(uploadsDir, 'lessons'), { recursive: true });
 
 // Middleware
 //
-// The frontend is rejected by the browser (the client sees a bare "Network
-// Error", never the server's answer) when its origin is missing here. Three
-// kinds of origin have to pass in development:
-//   - localhost, on whatever port create-react-app lands on (it silently moves
-//     to 3001, 3002, ... whenever an earlier run still holds 3000),
-//   - this machine's LAN address, when the app is opened from another device
-//     on the same network (http://192.168.x.x:3000),
-//   - anything listed in ALLOWED_ORIGINS, which is the only door kept open in
-//     production, where a real domain must be spelled out.
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
-  .split(',')
-  .map((origin) => origin.trim())
+// Collect allowed origins from ALLOWED_ORIGINS, CORS_ORIGIN, and FRONTEND_URL.
+// Strips trailing slashes to prevent subtle CORS mismatches.
+const rawOrigins = [
+  ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : []),
+  ...(process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : []),
+  ...(process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',') : []),
+];
+const allowedOrigins = rawOrigins
+  .map((origin) => origin.trim().replace(/\/+$/, ''))
   .filter(Boolean);
 
 // RFC1918 ranges plus loopback: hosts only reachable inside the local network.
@@ -68,7 +65,8 @@ app.use(cors({
     // No Origin header means a same-origin, curl or server-to-server call,
     // which CORS does not govern.
     if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
+    const normalizedOrigin = origin.replace(/\/+$/, '');
+    if (allowedOrigins.includes(normalizedOrigin)) return callback(null, true);
     if (process.env.NODE_ENV === 'production') return callback(null, false);
 
     try {
@@ -134,4 +132,3 @@ if (require.main === module) {
 }
 
 module.exports = app;
-

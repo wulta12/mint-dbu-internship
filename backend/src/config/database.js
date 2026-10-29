@@ -8,19 +8,22 @@ let poolConfig;
 if (process.env.DATABASE_URL) {
   poolConfig = {
     connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false, session: {} }, // Neon requires sslmode=require
+    ssl: { rejectUnauthorized: false }, // Neon requires SSL
+    max: 20,
+    idleTimeoutMillis: 60000,
+    connectionTimeoutMillis: 10000,
   };
 } else {
   poolConfig = {
     host: process.env.DB_HOST || 'localhost',
     user: process.env.DB_USER || 'postgres',
     password: process.env.DB_PASSWORD || 'postgres123',
-    database: process.env.DB_NAME || 'mint_training_system',
+    database: process.env.DB_NAME || process.env.DB_DATABASE || 'mint_training_system',
     port: process.env.DB_PORT || 5432,
     max: 20,
     idleTimeoutMillis: 60000,
     connectionTimeoutMillis: 10000,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false, session: {} } : false,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
   };
 }
 
