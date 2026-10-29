@@ -12,8 +12,7 @@ import {
   ChevronDown,
   ChevronRight,
   GraduationCap,
-  Menu,
-  X
+  Menu
 } from 'lucide-react';
 import mintLogo from '../images/mint-logo.png';
 
