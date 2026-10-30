@@ -19,22 +19,49 @@ const Register = () => {
     department_id: ''
   });
   const [departments, setDepartments] = useState([]);
+  const [loadingDepartments, setLoadingDepartments] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
+    let retries = 0;
+    const maxRetries = 3;
+
     const loadDepartments = async () => {
       try {
+        setLoadingDepartments(true);
         const res = await departmentService.getAll();
-        setDepartments(res.data?.departments || []);
+        const depts = res.data?.departments || (Array.isArray(res.data) ? res.data : []);
+        if (isMounted) {
+          if (depts && depts.length > 0) {
+            setDepartments(depts);
+            setLoadingDepartments(false);
+          } else if (retries < maxRetries) {
+            retries++;
+            setTimeout(loadDepartments, 2500);
+          } else {
+            setDepartments([]);
+            setLoadingDepartments(false);
+          }
+        }
       } catch (err) {
         console.error('Failed to load departments:', err);
-        setDepartments([]);
+        if (isMounted) {
+          if (retries < maxRetries) {
+            retries++;
+            setTimeout(loadDepartments, 2500);
+          } else {
+            setDepartments([]);
+            setLoadingDepartments(false);
+          }
+        }
       }
     };
     loadDepartments();
+    return () => { isMounted = false; };
   }, []);
 
   const handleChange = (e) => {
@@ -237,10 +264,15 @@ const Register = () => {
                 name="department_id"
                 value={formData.department_id}
                 onChange={handleChange}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-mint-primary focus:border-transparent transition-all text-gray-800 bg-white"
+                disabled={loadingDepartments && departments.length === 0}
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-mint-primary focus:border-transparent transition-all text-gray-800 bg-white disabled:bg-gray-100 disabled:cursor-wait"
                 required
               >
-                <option value="">{t('Select your department')}</option>
+                <option value="">
+                  {loadingDepartments && departments.length === 0
+                    ? t('Loading departments...')
+                    : t('Select your department')}
+                </option>
                 {departments.map((dept) => (
                   <option key={dept.id} value={dept.id}>{dept.name}</option>
                 ))}

@@ -9,12 +9,30 @@ import axios from 'axios';
 // everywhere - hardcoding http://localhost:5000 makes every other device call
 // *its own* localhost and fail with a bare network error.
 // REACT_APP_API_URL still wins when the API lives somewhere else.
-const API_ORIGIN = (
-  process.env.REACT_APP_API_URL || `http://${window.location.hostname || 'localhost'}:5000`
-)
-  .replace(/\/api\/?$/, '')
-  .replace(/\/+$/, '');
+const resolveApiBase = () => {
+  if (process.env.REACT_APP_API_URL) {
+    return process.env.REACT_APP_API_URL;
+  }
+  if (typeof window !== 'undefined' && window.location) {
+    const host = window.location.hostname || '';
+    const isLocal =
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      host === '[::1]' ||
+      /^10\./.test(host) ||
+      /^192\.168\./.test(host) ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(host);
 
+    if (!isLocal || host.includes('vercel.app')) {
+      return 'https://online-training-system.onrender.com/api';
+    }
+    return `http://${host || 'localhost'}:5000/api`;
+  }
+  return 'http://localhost:5000/api';
+};
+
+const RAW_API_URL = resolveApiBase();
+const API_ORIGIN = RAW_API_URL.replace(/\/api\/?$/, '').replace(/\/+$/, '');
 const API_URL = `${API_ORIGIN}/api`;
 
 // Exported so flows that need a real browser navigation rather than an XHR can
@@ -1252,10 +1270,29 @@ export const departmentService = {
   getAll: async () => {
     try {
       const response = await api.get('/departments/all');
+      if (response.data && response.data.data?.departments?.length > 0) {
+        return response.data;
+      }
+      const fallback = await api.get('/departments');
+      return fallback.data;
+    } catch (error) {
+      console.warn('Get departments/all failed, trying fallback /departments:', getErrorMessage(error));
+      try {
+        const fallback = await api.get('/departments');
+        return fallback.data;
+      } catch (fallbackError) {
+        console.error('Get departments error:', getErrorMessage(fallbackError));
+        return { success: false, data: { departments: [] } };
+      }
+    }
+  },
+  getActive: async () => {
+    try {
+      const response = await api.get('/departments');
       return response.data;
     } catch (error) {
-      console.error('Get departments error:', getErrorMessage(error));
-      return { success: true, data: { departments: [] } };
+      console.error('Get active departments error:', getErrorMessage(error));
+      return { success: false, data: { departments: [] } };
     }
   },
 

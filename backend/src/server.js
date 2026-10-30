@@ -42,10 +42,20 @@ fs.mkdirSync(path.join(uploadsDir, 'lessons'), { recursive: true });
 //
 // Collect allowed origins from ALLOWED_ORIGINS, CORS_ORIGIN, and FRONTEND_URL.
 // Strips trailing slashes to prevent subtle CORS mismatches.
+const defaultAllowedOrigins = [
+  'https://mint-dbu-internship.vercel.app',
+  'https://mint-training-frontend.onrender.com',
+  'http://localhost:3000',
+  'http://localhost:5000',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:5000'
+];
+
 const rawOrigins = [
   ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : []),
   ...(process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : []),
   ...(process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',') : []),
+  ...defaultAllowedOrigins
 ];
 const allowedOrigins = rawOrigins
   .map((origin) => origin.trim().replace(/\/+$/, ''))
@@ -66,18 +76,35 @@ app.use(cors({
     // which CORS does not govern.
     if (!origin) return callback(null, true);
     const normalizedOrigin = origin.replace(/\/+$/, '');
-    if (allowedOrigins.includes(normalizedOrigin)) return callback(null, true);
-    if (process.env.NODE_ENV === 'production') return callback(null, false);
+
+    // Allow wildcard or explicit whitelist
+    if (allowedOrigins.includes('*') || allowedOrigins.includes(normalizedOrigin)) {
+      return callback(null, true);
+    }
 
     try {
       const { protocol, hostname } = new URL(origin);
       const isWebOrigin = protocol === 'http:' || protocol === 'https:';
-      return callback(null, isWebOrigin && isPrivateHost(hostname));
+      if (!isWebOrigin) return callback(null, false);
+
+      // Automatically allow all Vercel deployments (*.vercel.app) and Render services (*.onrender.com)
+      if (hostname.endsWith('.vercel.app') || hostname.endsWith('.onrender.com')) {
+        return callback(null, true);
+      }
+
+      // Local / LAN development
+      if (process.env.NODE_ENV !== 'production' && isPrivateHost(hostname)) {
+        return callback(null, true);
+      }
+
+      return callback(null, false);
     } catch {
       return callback(null, false);
     }
   },
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -111,6 +138,32 @@ app.use('/api/notifications', notificationRoutes);
 
 // Admin: list all trainees
 app.get('/api/trainees', auth, authorize('admin'), userController.getTrainees);
+
+// Root welcome & API status
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    message: 'MinT Training System Backend API is running successfully',
+    version: '2.0.0',
+    status: 'online',
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      health: '/api/health',
+      departments: '/api/departments/all',
+      trainings: '/api/trainings',
+      stats: '/api/dashboard/stats'
+    }
+  });
+});
+
+app.get('/api', (req, res) => {
+  res.json({
+    success: true,
+    message: 'MinT Training System API Root',
+    status: 'online',
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Health check
 app.get('/api/health', (req, res) => {
