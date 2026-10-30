@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { KeyRound, ArrowLeft, ShieldCheck, RefreshCw } from 'lucide-react';
 import { authService } from '../services/api';
 import Spinner from '../components/Spinner';
+import { toast } from '../components/Toast';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useLanguage } from '../i18n/LanguageContext';
 
@@ -40,16 +41,21 @@ const VerifyOtp = () => {
     try {
       const response = await authService.verifyPasswordOtp(email.trim(), otp.trim());
       if (response?.verified && response?.resetToken) {
+        toast.success(t('Code verified! Please set your new password.'));
         // Hand straight over to the existing reset page, which already knows
         // how to consume a token. The code is never kept in the URL.
         navigate(`/reset-password?token=${encodeURIComponent(response.resetToken)}`, {
           replace: true
         });
       } else {
-        setError(t(response?.message || 'Something went wrong. Please try again.'));
+        const msg = response?.message || 'Something went wrong. Please try again.';
+        setError(t(msg));
+        toast.error(t(msg));
       }
     } catch (err) {
-      setError(t(err.response?.data?.message || 'Something went wrong. Please try again.'));
+      const msg = err.response?.data?.message || err.message || 'Something went wrong. Please try again.';
+      setError(t(msg));
+      toast.error(t(msg));
     } finally {
       setLoading(false);
     }
@@ -72,11 +78,16 @@ const VerifyOtp = () => {
         // must not imply the address definitely exists.
         setResent(true);
         setOtp('');
+        toast.success(t('A new code has been sent if the email is registered.'));
       } else {
-        setError(t(response?.message || 'Something went wrong. Please try again.'));
+        const msg = response?.message || 'Something went wrong. Please try again.';
+        setError(t(msg));
+        toast.error(t(msg));
       }
     } catch (err) {
-      setError(t(err.response?.data?.message || 'Something went wrong. Please try again.'));
+      const msg = err.response?.data?.message || err.message || 'Something went wrong. Please try again.';
+      setError(t(msg));
+      toast.error(t(msg));
     } finally {
       setResending(false);
     }

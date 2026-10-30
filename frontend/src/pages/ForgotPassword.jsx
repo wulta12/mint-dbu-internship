@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Mail, ArrowLeft, CheckCircle2, Send } from 'lucide-react';
+import { Mail, ArrowLeft, CheckCircle2, Send, KeyRound } from 'lucide-react';
 import { authService } from '../services/api';
 import Spinner from '../components/Spinner';
+import { toast } from '../components/Toast';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useLanguage } from '../i18n/LanguageContext';
 
@@ -30,13 +31,18 @@ const ForgotPassword = () => {
       const response = await authService.requestPasswordReset(email.trim(), lang);
       if (response?.success) {
         setSent(true);
+        toast.success(t('Reset code and link sent! Please check your email.'));
       } else {
         // Pass through t() so a server-side message is translated when we have
         // a translation, and shown in English when we do not.
-        setError(t(response?.message || 'Something went wrong. Please try again.'));
+        const msg = response?.message || 'Something went wrong. Please try again.';
+        setError(t(msg));
+        toast.error(t(msg));
       }
     } catch (err) {
-      setError(t(err.response?.data?.message || 'Something went wrong. Please try again.'));
+      const msg = err.response?.data?.message || err.message || 'Something went wrong. Please try again.';
+      setError(t(msg));
+      toast.error(t(msg));
     } finally {
       setLoading(false);
     }
@@ -83,14 +89,15 @@ const ForgotPassword = () => {
             </p>
 
             {/* The same email carries a 6-digit code as well as the link, so
-                offer the code route too. The address is handed over in router
+                offer the code route prominently. The address is handed over in router
                 state rather than the query string. */}
             <Link
               to="/verify-otp"
               state={{ email: email.trim() }}
-              className="w-full border border-mint-primary dark:border-slate-600 text-mint-primary dark:text-blue-300 py-3 rounded-lg hover:bg-mint-light dark:hover:bg-slate-700 transition-all font-semibold mb-3 inline-block text-center"
+              className="w-full bg-mint-primary hover:bg-opacity-90 text-white py-3.5 rounded-lg transition-all font-semibold mb-3 flex items-center justify-center gap-2 text-center shadow-md hover:shadow-lg"
             >
-              {t('Enter the code from your email')}
+              <KeyRound className="h-5 w-5" />
+              {t('Enter 6-Digit Code from Email')}
             </Link>
 
             <button

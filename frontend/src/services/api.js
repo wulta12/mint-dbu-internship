@@ -161,7 +161,7 @@ return payload;
   // message, so there is no way to tell from here whether the address exists.
   requestPasswordReset: async (email, lang) => {
     try {
-      const response = await api.post('/auth/forgot-password', { email, lang });
+      const response = await api.post('/auth/forgot-password', { email, lang }, { timeout: 20000 });
       return response.data;
     } catch (error) {
       console.error('Password reset request error:', getErrorMessage(error));
@@ -174,7 +174,7 @@ return payload;
   // initial request, so it cannot be used to probe for accounts.
   resendPasswordOtp: async (email, lang) => {
     try {
-      const response = await api.post('/auth/forgot-password/resend-otp', { email, lang });
+      const response = await api.post('/auth/forgot-password/resend-otp', { email, lang }, { timeout: 20000 });
       return response.data;
     } catch (error) {
       console.error('Resend OTP error:', getErrorMessage(error));
@@ -187,7 +187,7 @@ return payload;
   // locked-out code; the server message explains which.
   verifyPasswordOtp: async (email, otp) => {
     try {
-      const response = await api.post('/auth/forgot-password/verify-otp', { email, otp });
+      const response = await api.post('/auth/forgot-password/verify-otp', { email, otp }, { timeout: 15000 });
       return response.data;
     } catch (error) {
       console.error('Verify OTP error:', getErrorMessage(error));

@@ -8,10 +8,9 @@ const nodemailer = require('nodemailer');
 // missing, which is surfaced loudly at send time rather than swallowed.
 
 const FROM_NAME = process.env.MAIL_FROM_NAME || 'MinT Training System';
-const FROM_ADDRESS = process.env.MAIL_FROM || 'no-reply@mint.gov.et';
+const FROM_ADDRESS = process.env.MAIL_FROM || process.env.EMAIL_FROM || process.env.SMTP_USER || 'no-reply@mint.gov.et';
 
 let transporter = null;
-let transporterChecked = false;
 
 // Google displays App Passwords in groups of four (e.g. "abcd efgh ijkl mnop")
 // and people routinely paste them with those spaces still in place. An
@@ -20,19 +19,47 @@ let transporterChecked = false;
 const smtpPassword = () => String(process.env.SMTP_PASS || '').replace(/\s+/g, '');
 
 const smtpConfigured = () =>
-  Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && smtpPassword());
+  Boolean((process.env.SMTP_HOST || process.env.SMTP_SERVICE) && process.env.SMTP_USER && smtpPassword());
 
 const getTransporter = () => {
-  if (transporterChecked) return transporter;
-  transporterChecked = true;
+  if (transporter) return transporter;
 
   if (!smtpConfigured()) return null;
 
+  const isGmail = (process.env.SMTP_HOST || '').includes('gmail') ||
+                  (process.env.SMTP_SERVICE || '').toLowerCase() === 'gmail';
+
+  // Gmail works most reliably over direct SSL (port 465) or via nodemailer's built-in service
+  if (isGmail) {
+    transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: smtpPassword()
+      },
+      connectionTimeout: 10000, // 10s timeout to never hang the request
+      greetingTimeout: 10000,
+      socketTimeout: 15000
+    });
+    return transporter;
+  }
+
+  const port = Number(process.env.SMTP_PORT) || 465;
+  const secure = process.env.SMTP_SECURE !== undefined
+    ? String(process.env.SMTP_SECURE).toLowerCase() === 'true'
+    : port === 465;
+
   transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT) || 587,
-    secure: String(process.env.SMTP_SECURE || '').toLowerCase() === 'true',
-    auth: { user: process.env.SMTP_USER, pass: smtpPassword() }
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port,
+    secure,
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: smtpPassword()
+    },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000
   });
 
   return transporter;
