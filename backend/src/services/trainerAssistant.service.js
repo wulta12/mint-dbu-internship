@@ -193,10 +193,7 @@ async function generateDraft({ trainingId, contentType, topic, questionCount }) 
   }
   return {
     contentType: 'assessment',
-    draft: assessmentDraft(cleanTopic, questionCount),
-    note:
-      'This is a draft only. The trainer must verify each question and its marked answer before publishing. ' +
-      'Drafts are never shown to trainees and no trainee attempt data is used.'
+    draft: assessmentDraft(cleanTopic, questionCount)
   };
 }
 

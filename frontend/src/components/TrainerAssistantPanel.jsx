@@ -401,13 +401,6 @@ const TrainerAssistantPanel = ({ trainingId, trainingTitle, onUseLessonDraft, on
                   )}
                 </div>
 
-                {result.note && (
-                  <div className="px-4 py-2 bg-yellow-50 border-t border-yellow-200 text-xs text-yellow-800 flex items-start gap-2">
-                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                    {result.note}
-                  </div>
-                )}
-
                 <div className="px-4 py-3 bg-mint-light/40 border-t border-mint-border flex flex-wrap gap-2">
                   {result.contentType === 'lesson' && onUseLessonDraft && (
                     <button
