@@ -38,21 +38,13 @@ const PublicHeader = () => {
       <div className="container mx-auto px-4">
         <div className="flex justify-between items-center h-20">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-3">
+          <Link to="/" className="flex items-center" aria-label="MinT Home">
             <div className="bg-white dark:!bg-white rounded-lg p-1">
               <img
                 src={mintLogo}
                 alt="MinT Logo"
                 className="h-10 w-auto object-contain"
               />
-            </div>
-            <div className="ml-2">
-              <div className="text-white font-bold text-sm leading-tight tracking-wide">
-                Ministry of Innovation and Technology
-              </div>
-              <div className="text-mint-border text-xs">
-                Online Training Management System
-              </div>
             </div>
           </Link>
 
