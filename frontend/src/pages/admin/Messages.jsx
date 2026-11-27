@@ -659,8 +659,11 @@ const Messages = () => {
 
   // Who the conversation is with, and which role they hold.
   const peerOf = (thread) => {
+    if (!thread || !thread.root) {
+      return { name: '', role: null, email: '' };
+    }
     const root = thread.root;
-    const incoming = thread.items.find((item) => item.side === 'in');
+    const incoming = (thread.items || []).find((item) => item.side === 'in');
 
     if (root.side === 'in') {
       return { name: fullName(root), role: root.sender_role || null, email: root.sender_email };
@@ -676,11 +679,11 @@ const Messages = () => {
     };
   };
 
-  const listUnread = (thread) => thread.items.filter((item) => item.side === 'in' && !item.is_read).length;
+  const listUnread = (thread) => (thread?.items || []).filter((item) => item.side === 'in' && !item.is_read).length;
 
   const threadTrailing = (thread) => {
     if (tab === 'received') return null;
-    const replied = thread.items.some((item) => item.side === 'in');
+    const replied = (thread?.items || []).some((item) => item.side === 'in');
     return replied ? (
       <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700">
         <CheckCircle2 className="w-3 h-3" />
@@ -710,64 +713,9 @@ const Messages = () => {
   };
 
   const chatPane = (thread) => {
-    const peerInfo = peerOf(thread);
-    const unread = thread.items.filter((item) => item.side === 'in' && !item.is_read).length;
-
-    return (
-      <div
-        className={`bg-white rounded-xl shadow-card overflow-hidden flex-col min-h-0 ${
-          thread ? 'flex' : 'hidden lg:flex'
-        }`}
-      >
-        {thread ? (
-          <>
-            <ChatHeader
-              name={peerInfo.name}
-              role={peerInfo.role}
-              subtitle={`${thread.root.subject || '(no subject)'} · ${peerInfo.email}`}
-              onBack={() => setChatId(null)}
-              right={
-                <span
-                  className={`hidden sm:inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${
-                    unread > 0 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'
-                  }`}
-                >
-                  {unread > 0 ? <Mail className="w-3 h-3" /> : <MailOpen className="w-3 h-3" />}
-                  {unread > 0 ? `${unread} unread` : 'Read'}
-                </span>
-              }
-            />
-
-            <ChatMessages syncKey={`${thread.root.id}-${thread.items.length}`}>
-              {thread.items.map((item) => {
-                const isSelf = item.side === 'out';
-                return (
-                  <ChatBubble
-                    key={item.id}
-                    side={isSelf ? 'out' : 'in'}
-                    isSelf={isSelf}
-                    avatar={isSelf ? myName : fullName(item)}
-                    name={isSelf ? myName : fullName(item)}
-                    role={isSelf ? myRole : item.sender_role}
-                    text={item.message}
-                    time={formatWhen(item.created_at)}
-                  />
-                );
-              })}
-            </ChatMessages>
-
-            <ChatComposer
-              id={`thread-reply-${thread.root.id}`}
-              label={`Reply to ${peerInfo.name}`}
-              value={draftFor(threadDraftKey(thread.root.id))}
-              onChange={(value) => setDraft(threadDraftKey(thread.root.id), value)}
-              onSend={() => handleReplyThread(thread)}
-              sending={sendingReply}
-              placeholder="Write your reply..."
-              hint={`Goes to ${peerInfo.email}. The reply is saved in-app and also emailed. Enter sends, Shift+Enter starts a new line.`}
-            />
-          </>
-        ) : (
+    if (!thread || !thread.root) {
+      return (
+        <div className="bg-white rounded-xl shadow-card overflow-hidden hidden lg:flex flex-col min-h-0">
           <div className="flex-1 flex items-center justify-center p-10 text-center">
             <div>
               <AlertCircle className="w-12 h-12 text-mint-gray mx-auto mb-3" />
@@ -777,7 +725,60 @@ const Messages = () => {
               </p>
             </div>
           </div>
-        )}
+        </div>
+      );
+    }
+
+    const peerInfo = peerOf(thread);
+    const unread = (thread.items || []).filter((item) => item.side === 'in' && !item.is_read).length;
+
+    return (
+      <div className="bg-white rounded-xl shadow-card overflow-hidden flex flex-col min-h-0">
+        <ChatHeader
+          name={peerInfo.name}
+          role={peerInfo.role}
+          subtitle={`${thread.root.subject || '(no subject)'} · ${peerInfo.email}`}
+          onBack={() => setChatId(null)}
+          right={
+            <span
+              className={`hidden sm:inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${
+                unread > 0 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'
+              }`}
+            >
+              {unread > 0 ? <Mail className="w-3 h-3" /> : <MailOpen className="w-3 h-3" />}
+              {unread > 0 ? `${unread} unread` : 'Read'}
+            </span>
+          }
+        />
+
+        <ChatMessages syncKey={`${thread.root.id}-${thread.items.length}`}>
+          {thread.items.map((item) => {
+            const isSelf = item.side === 'out';
+            return (
+              <ChatBubble
+                key={item.id}
+                side={isSelf ? 'out' : 'in'}
+                isSelf={isSelf}
+                avatar={isSelf ? myName : fullName(item)}
+                name={isSelf ? myName : fullName(item)}
+                role={isSelf ? myRole : item.sender_role}
+                text={item.message}
+                time={formatWhen(item.created_at)}
+              />
+            );
+          })}
+        </ChatMessages>
+
+        <ChatComposer
+          id={`thread-reply-${thread.root.id}`}
+          label={`Reply to ${peerInfo.name}`}
+          value={draftFor(threadDraftKey(thread.root.id))}
+          onChange={(value) => setDraft(threadDraftKey(thread.root.id), value)}
+          onSend={() => handleReplyThread(thread)}
+          sending={sendingReply}
+          placeholder="Write your reply..."
+          hint={`Goes to ${peerInfo.email}. The reply is saved in-app and also emailed. Enter sends, Shift+Enter starts a new line.`}
+        />
       </div>
     );
   };

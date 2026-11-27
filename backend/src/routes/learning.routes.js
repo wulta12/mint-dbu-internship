@@ -37,6 +37,7 @@ router.post('/lessons/:lessonId/video-attestation', auth, authorize('trainee'), 
 router.get('/trainings/:trainingId/tree', auth, authorize('admin', 'trainer'), learningController.getCourseTree);
 
 router.post('/trainings/:trainingId/modules', auth, authorize('admin', 'trainer'), learningController.createModule);
+router.post('/trainings/:trainingId/modules/with-lessons', auth, authorize('admin', 'trainer'), learningController.createModuleWithLessons);
 router.put('/trainings/:trainingId/modules/reorder', auth, authorize('admin', 'trainer'), learningController.reorderModules);
 router.put('/modules/:id', auth, authorize('admin', 'trainer'), learningController.updateModule);
 router.delete('/modules/:id', auth, authorize('admin', 'trainer'), learningController.deleteModule);

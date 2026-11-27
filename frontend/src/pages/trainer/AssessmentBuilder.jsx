@@ -16,9 +16,11 @@ import {
   X,
   Star,
   ShieldCheck,
-  Clock
+  Clock,
+  Bot
 } from 'lucide-react';
 import AppLayout from '../../components/AppLayout';
+import TrainerAssistantPanel from '../../components/TrainerAssistantPanel';
 import { assessmentService, trainingService } from '../../services/api';
 import { confirm } from '../../components/ConfirmDialog';
 
@@ -58,6 +60,7 @@ const AssessmentBuilder = () => {
   const [questionModal, setQuestionModal] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState(null);
   const [questionForm, setQuestionForm] = useState(emptyQuestionForm);
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -469,12 +472,21 @@ const AssessmentBuilder = () => {
           <div className="flex items-center gap-2 px-6 py-4 border-b border-mint-border bg-mint-light/60">
             <HelpCircle className="w-5 h-5 text-mint-primary" />
             <h2 className="font-bold text-gray-900">Questions ({questions.length})</h2>
-            <button
-              onClick={openCreateQuestion}
-              className="ml-auto flex items-center gap-1.5 px-3 py-1.5 bg-mint-primary text-white rounded-lg hover:bg-opacity-90 transition text-sm font-semibold"
-            >
-              <Plus className="w-4 h-4" /> Add Question
-            </button>
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setAiPanelOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 border border-mint-primary text-mint-primary hover:bg-mint-light rounded-lg transition text-sm font-semibold"
+              >
+                <Bot className="w-4 h-4" /> AI Assistant
+              </button>
+              <button
+                onClick={openCreateQuestion}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-mint-primary text-white rounded-lg hover:bg-opacity-90 transition text-sm font-semibold"
+              >
+                <Plus className="w-4 h-4" /> Add Question
+              </button>
+            </div>
           </div>
 
           {questions.length === 0 ? (
@@ -603,6 +615,18 @@ const AssessmentBuilder = () => {
               </div>
             </div>
           </div>
+        )}
+        {/* ---------- Trainer AI assistant ---------- */}
+        {aiPanelOpen && (
+          <TrainerAssistantPanel
+            trainingId={trainingId}
+            trainingTitle={training?.training_title}
+            initialContentType="assessment"
+            onSaveAssessmentDraft={async () => {
+              await fetchAssessment();
+            }}
+            onClose={() => setAiPanelOpen(false)}
+          />
         )}
       </div>
     </AppLayout>

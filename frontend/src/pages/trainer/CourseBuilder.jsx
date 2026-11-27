@@ -552,6 +552,12 @@ const CourseBuilder = () => {
             trainingTitle={training?.training_title}
             onUseLessonDraft={useAiLessonDraft}
             onUseModuleDraft={useAiModuleDraft}
+            onSaveModuleDraft={async () => {
+              await fetchTree();
+            }}
+            onSaveLessonDraft={async () => {
+              await fetchTree();
+            }}
             onClose={() => setAiPanelOpen(false)}
           />
         )}

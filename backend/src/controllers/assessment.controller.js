@@ -471,6 +471,42 @@ exports.addQuestion = async (req, res, next) => {
   }
 };
 
+exports.addQuestionsBatch = async (req, res, next) => {
+  try {
+    const assessment = await Assessment.findById(req.params.assessmentId);
+    if (!assessment) {
+      throw new ApiError(404, 'Assessment not found');
+    }
+    await ensureCanManage(req, assessment.training_id);
+    const existing = await Assessment.getQuestions(assessment.id, { includeAnswers: true });
+    const questionsList = Array.isArray(req.body.questions) ? req.body.questions : [];
+
+    const created = [];
+    let pos = existing.length;
+    for (const q of questionsList) {
+      pos++;
+      const correct = String(q.correct_answer || 'A').toUpperCase();
+      const question = await Assessment.addQuestion(assessment.id, {
+        question_text: q.question_text,
+        option_a: q.option_a,
+        option_b: q.option_b,
+        option_c: q.option_c,
+        option_d: q.option_d,
+        correct_answer: ['A', 'B', 'C', 'D'].includes(correct) ? correct : 'A',
+        position: pos
+      });
+      created.push(question);
+    }
+    res.status(201).json({
+      success: true,
+      message: `${created.length} questions added successfully`,
+      data: { questions: created }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 exports.updateQuestion = async (req, res, next) => {
   try {
     const question = await Assessment.getQuestion(req.params.questionId);

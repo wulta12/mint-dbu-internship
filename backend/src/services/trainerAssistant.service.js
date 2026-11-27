@@ -139,11 +139,14 @@ function assessmentDraft(topic, count) {
 
   for (let i = 0; i < total; i++) {
     const blueprint = QUESTION_BLUEPRINTS[i % QUESTION_BLUEPRINTS.length];
-    const options = [blueprint.answer, ...blueprint.distractors.slice(0, 3)];
+    const rawOptions = [blueprint.answer, ...blueprint.distractors.slice(0, 3)];
+    const options = rawOptions.map((opt) => opt.replace(/\{topic\}/g, t));
+    const cleanAnswer = blueprint.answer.replace(/\{topic\}/g, t);
+
     // Deterministic rotation so the correct answer is not always A.
     const rotate = i % 4;
     const rotated = [...options.slice(rotate), ...options.slice(0, rotate)];
-    const correctIndex = rotated.indexOf(blueprint.answer);
+    const correctIndex = rotated.indexOf(cleanAnswer);
 
     questions.push({
       question_text: blueprint.stem.replace(/\{topic\}/g, t),
@@ -151,7 +154,7 @@ function assessmentDraft(topic, count) {
       option_b: rotated[1],
       option_c: rotated[2],
       option_d: rotated[3],
-      correct_answer: ['A', 'B', 'C', 'D'][correctIndex]
+      correct_answer: ['A', 'B', 'C', 'D'][correctIndex >= 0 ? correctIndex : 0]
     });
   }
 

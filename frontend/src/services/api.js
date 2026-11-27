@@ -10,7 +10,8 @@ import axios from 'axios';
 // *its own* localhost and fail with a bare network error.
 // REACT_APP_API_URL still wins when the API lives somewhere else.
 const resolveApiBase = () => {
-  if (process.env.REACT_APP_API_URL) {
+  // If explicitly overridden with a remote URL (e.g. Render production URL)
+  if (process.env.REACT_APP_API_URL && !process.env.REACT_APP_API_URL.includes('localhost')) {
     return process.env.REACT_APP_API_URL;
   }
   if (typeof window !== 'undefined' && window.location) {
@@ -28,7 +29,7 @@ const resolveApiBase = () => {
     }
     return `http://${host || 'localhost'}:5000/api`;
   }
-  return 'http://localhost:5000/api';
+  return process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 };
 
 const RAW_API_URL = resolveApiBase();
@@ -963,6 +964,11 @@ export const learningService = {
     return response.data;
   },
 
+  createModuleWithLessons: async (trainingId, data) => {
+    const response = await api.post(`/learning/trainings/${trainingId}/modules/with-lessons`, data);
+    return response.data;
+  },
+
   updateModule: async (moduleId, data) => {
     const response = await api.put(`/learning/modules/${moduleId}`, data);
     return response.data;
@@ -1119,6 +1125,11 @@ export const assessmentService = {
 
   addQuestion: async (assessmentId, data) => {
     const response = await api.post(`/assessment/${assessmentId}/questions`, data);
+    return response.data;
+  },
+
+  addQuestionsBatch: async (assessmentId, questions) => {
+    const response = await api.post(`/assessment/${assessmentId}/questions/batch`, { questions });
     return response.data;
   },
 

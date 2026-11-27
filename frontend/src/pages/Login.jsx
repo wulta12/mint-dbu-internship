@@ -177,10 +177,14 @@ const Login = () => {
       // Show specific error message
       if (err.response?.data?.message) {
         setError(err.response.data.message);
+      } else if (err.message === 'Network Error' || !err.response) {
+        setError(
+          t('Cannot connect to server. If running locally, please start the backend server on port 5000. If using cloud, the server may be waking up—please retry in a moment.')
+        );
       } else if (err.message) {
         setError(err.message);
       } else {
-        setError('Login failed. Please try again.');
+        setError(t('Login failed. Please try again.'));
       }
     } finally {
       setLoading(false);

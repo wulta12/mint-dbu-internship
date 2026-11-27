@@ -562,6 +562,46 @@ exports.createModule = async (req, res, next) => {
   }
 };
 
+exports.createModuleWithLessons = async (req, res, next) => {
+  try {
+    const training = await ensureCanManage(req, req.params.trainingId);
+    const modules = await LearningContent.getModulesByTraining(training.id);
+    const { title, description, lessons = [] } = req.body;
+
+    const module = await LearningContent.createModule(training.id, {
+      title,
+      description,
+      position: modules.length + 1
+    });
+
+    const allLessons = await LearningContent.getLessonsByTraining(training.id);
+    let nextPos = allLessons.length;
+    const createdLessons = [];
+
+    for (const l of lessons) {
+      nextPos++;
+      const lesson = await LearningContent.createLesson(training.id, {
+        title: l.title,
+        type: l.type || 'text',
+        content: l.content || '',
+        module_id: module.id,
+        is_required: l.is_required !== false,
+        is_published: true,
+        position: nextPos
+      });
+      createdLessons.push(lesson);
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Module and lessons created successfully',
+      data: { module, lessons: createdLessons }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 exports.updateModule = async (req, res, next) => {
   try {
     const module = await LearningContent.updateModule(req.params.id, req.body);

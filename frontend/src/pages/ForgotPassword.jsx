@@ -40,7 +40,12 @@ const ForgotPassword = () => {
         toast.error(t(msg));
       }
     } catch (err) {
-      const msg = err.response?.data?.message || err.message || 'Something went wrong. Please try again.';
+      const msg =
+        err.response?.data?.message ||
+        (err.message === 'Network Error' || !err.response
+          ? 'Cannot connect to server. Please check your backend connection.'
+          : err.message) ||
+        'Something went wrong. Please try again.';
       setError(t(msg));
       toast.error(t(msg));
     } finally {

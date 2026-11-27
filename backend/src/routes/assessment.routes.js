@@ -14,6 +14,7 @@ router.post('/trainings/:trainingId', auth, authorize('admin', 'trainer'), asses
 router.delete('/:assessmentId', auth, authorize('admin', 'trainer'), assessmentController.remove);
 
 router.post('/:assessmentId/questions', auth, authorize('admin', 'trainer'), assessmentController.addQuestion);
+router.post('/:assessmentId/questions/batch', auth, authorize('admin', 'trainer'), assessmentController.addQuestionsBatch);
 router.put('/:assessmentId/questions/reorder', auth, authorize('admin', 'trainer'), assessmentController.reorderQuestions);
 router.put('/questions/:questionId', auth, authorize('admin', 'trainer'), assessmentController.updateQuestion);
 router.delete('/questions/:questionId', auth, authorize('admin', 'trainer'), assessmentController.deleteQuestion);

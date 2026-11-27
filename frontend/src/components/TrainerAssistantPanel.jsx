@@ -13,7 +13,7 @@ import {
   ShieldCheck,
   Check
 } from 'lucide-react';
-import { trainerAssistantService } from '../services/api';
+import { trainerAssistantService, learningService, assessmentService } from '../services/api';
 import { toast } from './Toast';
 
 const CONTENT_OPTIONS = [
@@ -95,12 +95,24 @@ const DraftBody = ({ text }) => {
   );
 };
 
-const TrainerAssistantPanel = ({ trainingId, trainingTitle, onUseLessonDraft, onUseModuleDraft, onClose }) => {
+const TrainerAssistantPanel = ({
+  trainingId,
+  trainingTitle,
+  initialContentType = 'lesson',
+  onUseLessonDraft,
+  onUseModuleDraft,
+  onSaveModuleDraft,
+  onSaveAssessmentDraft,
+  onSaveLessonDraft,
+  onClose
+}) => {
   const [status, setStatus] = useState('loading'); // loading | enabled | disabled
-  const [contentType, setContentType] = useState('lesson');
+  const [contentType, setContentType] = useState(initialContentType || 'lesson');
   const [topic, setTopic] = useState('');
   const [questionCount, setQuestionCount] = useState(5);
   const [generating, setGenerating] = useState(false);
+  const [savingAction, setSavingAction] = useState(false);
+  const [savedType, setSavedType] = useState(null); // null | 'module' | 'assessment' | 'lesson'
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
 
@@ -129,6 +141,7 @@ const TrainerAssistantPanel = ({ trainingId, trainingTitle, onUseLessonDraft, on
     setError('');
     setGenerating(true);
     setResult(null);
+    setSavedType(null);
     try {
       const res = await trainerAssistantService.generate(
         trainingId,
@@ -145,6 +158,100 @@ const TrainerAssistantPanel = ({ trainingId, trainingTitle, onUseLessonDraft, on
       setError(err.response?.data?.message || 'Could not generate a draft. Please try again.');
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const saveModuleToCourse = async () => {
+    if (!result?.draft || !trainingId) return;
+    setSavingAction(true);
+    try {
+      const res = await learningService.createModuleWithLessons(trainingId, {
+        title: result.draft.title || 'New module',
+        description: result.draft.description || '',
+        lessons: result.draft.lessons || []
+      });
+      setSavedType('module');
+      toast.success(
+        `Module "${result.draft.title}" and ${(result.draft.lessons || []).length} lessons saved successfully!`
+      );
+      if (onSaveModuleDraft) {
+        await onSaveModuleDraft(res.data?.module);
+      }
+    } catch (err) {
+      console.error('Failed to save module:', err);
+      toast.error(err.response?.data?.message || 'Failed to save module. Please try again.');
+    } finally {
+      setSavingAction(false);
+    }
+  };
+
+  const saveAssessmentQuestions = async () => {
+    if (!result?.draft || !trainingId) return;
+    setSavingAction(true);
+    try {
+      let assessmentId;
+      try {
+        const manageRes = await assessmentService.manage(trainingId);
+        if (manageRes.data?.assessment?.id) {
+          assessmentId = manageRes.data.assessment.id;
+        }
+      } catch (e) {
+        // assessment might not exist yet
+      }
+
+      if (!assessmentId) {
+        const upsertRes = await assessmentService.upsert(trainingId, {
+          title: result.draft.title || 'Final assessment',
+          description: result.draft.description || '',
+          pass_score: result.draft.pass_score || 70,
+          time_limit_minutes: result.draft.time_limit_minutes || 20,
+          shuffle_questions: true,
+          shuffle_options: true
+        });
+        assessmentId = upsertRes.data?.assessment?.id || upsertRes.assessment?.id;
+      }
+
+      if (!assessmentId) {
+        throw new Error('Unable to find or create assessment');
+      }
+
+      const questions = result.draft.questions || [];
+      await assessmentService.addQuestionsBatch(assessmentId, questions);
+
+      setSavedType('assessment');
+      toast.success(`${questions.length} questions saved to assessment successfully!`);
+      if (onSaveAssessmentDraft) {
+        await onSaveAssessmentDraft(assessmentId);
+      }
+    } catch (err) {
+      console.error('Failed to save questions:', err);
+      toast.error(err.response?.data?.message || 'Failed to save questions to assessment.');
+    } finally {
+      setSavingAction(false);
+    }
+  };
+
+  const saveLessonToCourse = async () => {
+    if (!result?.draft || !trainingId) return;
+    setSavingAction(true);
+    try {
+      await learningService.createLesson(trainingId, {
+        title: result.draft.title,
+        type: result.draft.type || 'text',
+        content: result.draft.content || '',
+        is_required: result.draft.is_required !== false,
+        is_published: true
+      });
+      setSavedType('lesson');
+      toast.success(`Lesson "${result.draft.title}" saved successfully!`);
+      if (onSaveLessonDraft) {
+        await onSaveLessonDraft();
+      }
+    } catch (err) {
+      console.error('Failed to save lesson:', err);
+      toast.error(err.response?.data?.message || 'Failed to save lesson.');
+    } finally {
+      setSavingAction(false);
     }
   };
 
@@ -346,9 +453,15 @@ const TrainerAssistantPanel = ({ trainingId, trainingTitle, onUseLessonDraft, on
               <div className="mt-5 border border-mint-border rounded-lg overflow-hidden">
                 <div className="px-4 py-3 bg-mint-light/60 border-b border-mint-border flex items-center justify-between gap-2">
                   <p className="text-sm font-bold text-gray-900 truncate">{draft.title}</p>
-                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 shrink-0">
-                    DRAFT &mdash; NOT SAVED
-                  </span>
+                  {savedType ? (
+                    <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-green-100 text-green-700 shrink-0 flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5" /> SAVED
+                    </span>
+                  ) : (
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 shrink-0">
+                      DRAFT &mdash; NOT SAVED
+                    </span>
+                  )}
                 </div>
 
                 <div className="p-4 max-h-80 overflow-y-auto">
@@ -401,34 +514,108 @@ const TrainerAssistantPanel = ({ trainingId, trainingTitle, onUseLessonDraft, on
                   )}
                 </div>
 
-                <div className="px-4 py-3 bg-mint-light/40 border-t border-mint-border flex flex-wrap gap-2">
-                  {result.contentType === 'lesson' && onUseLessonDraft && (
-                    <button
-                      onClick={useLessonDraft}
-                      className="px-4 py-2 bg-mint-primary text-white rounded-lg text-sm font-semibold hover:bg-opacity-90 transition"
-                    >
-                      Use in a new lesson
-                    </button>
+                <div className="px-4 py-3 bg-mint-light/40 border-t border-mint-border flex flex-wrap items-center gap-2">
+                  {result.contentType === 'lesson' && (
+                    <>
+                      <button
+                        onClick={saveLessonToCourse}
+                        disabled={savingAction || savedType === 'lesson'}
+                        className="flex items-center gap-2 px-4 py-2 bg-mint-primary text-white rounded-lg text-sm font-semibold hover:bg-opacity-90 transition disabled:opacity-50"
+                      >
+                        {savingAction ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" /> Saving lesson&hellip;
+                          </>
+                        ) : savedType === 'lesson' ? (
+                          <>
+                            <Check className="w-4 h-4" /> Lesson Saved
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-4 h-4" /> Save as New Lesson
+                          </>
+                        )}
+                      </button>
+                      {onUseLessonDraft && (
+                        <button
+                          onClick={useLessonDraft}
+                          disabled={savingAction}
+                          className="px-4 py-2 border border-mint-border text-gray-700 rounded-lg text-sm font-semibold hover:bg-mint-light transition disabled:opacity-50"
+                        >
+                          Edit in form
+                        </button>
+                      )}
+                    </>
                   )}
-                  {result.contentType === 'module' && onUseModuleDraft && (
-                    <button
-                      onClick={useModuleDraft}
-                      className="px-4 py-2 bg-mint-primary text-white rounded-lg text-sm font-semibold hover:bg-opacity-90 transition"
-                    >
-                      Use as a new module
-                    </button>
+                  {result.contentType === 'module' && (
+                    <>
+                      <button
+                        onClick={saveModuleToCourse}
+                        disabled={savingAction || savedType === 'module'}
+                        className="flex items-center gap-2 px-4 py-2 bg-mint-primary text-white rounded-lg text-sm font-semibold hover:bg-opacity-90 transition disabled:opacity-50"
+                      >
+                        {savingAction ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" /> Saving module & lessons&hellip;
+                          </>
+                        ) : savedType === 'module' ? (
+                          <>
+                            <Check className="w-4 h-4" /> Module Saved
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-4 h-4" /> Save Module & Lessons
+                          </>
+                        )}
+                      </button>
+                      {onUseModuleDraft && (
+                        <button
+                          onClick={useModuleDraft}
+                          disabled={savingAction}
+                          className="px-4 py-2 border border-mint-border text-gray-700 rounded-lg text-sm font-semibold hover:bg-mint-light transition disabled:opacity-50"
+                        >
+                          Edit title in form
+                        </button>
+                      )}
+                    </>
                   )}
                   {result.contentType === 'assessment' && (
-                    <button
-                      onClick={copyAssessmentDraft}
-                      className="px-4 py-2 bg-mint-primary text-white rounded-lg text-sm font-semibold hover:bg-opacity-90 transition"
-                    >
-                      Copy questions
-                    </button>
+                    <>
+                      <button
+                        onClick={saveAssessmentQuestions}
+                        disabled={savingAction || savedType === 'assessment'}
+                        className="flex items-center gap-2 px-4 py-2 bg-mint-primary text-white rounded-lg text-sm font-semibold hover:bg-opacity-90 transition disabled:opacity-50"
+                      >
+                        {savingAction ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" /> Saving questions&hellip;
+                          </>
+                        ) : savedType === 'assessment' ? (
+                          <>
+                            <Check className="w-4 h-4" /> Questions Saved
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-4 h-4" /> Save Questions to Assessment
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={copyAssessmentDraft}
+                        disabled={savingAction}
+                        className="px-4 py-2 border border-mint-border text-gray-700 rounded-lg text-sm font-semibold hover:bg-mint-light transition disabled:opacity-50"
+                      >
+                        Copy questions
+                      </button>
+                    </>
                   )}
                   <button
-                    onClick={() => setResult(null)}
-                    className="px-4 py-2 border border-mint-border text-mint-gray rounded-lg text-sm font-semibold hover:bg-white transition"
+                    onClick={() => {
+                      setResult(null);
+                      setSavedType(null);
+                    }}
+                    disabled={savingAction}
+                    className="px-4 py-2 border border-mint-border text-mint-gray rounded-lg text-sm font-semibold hover:bg-white transition disabled:opacity-50"
                   >
                     Discard
                   </button>
